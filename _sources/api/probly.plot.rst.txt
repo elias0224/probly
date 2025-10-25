@@ -1,0 +1,13 @@
+﻿probly.plot
+===========
+
+.. automodule:: probly.plot
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      credal_set_plot
+      simplex_plot
+   
