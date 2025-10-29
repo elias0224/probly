@@ -1,6 +1,7 @@
 import pytest
 pytest.importorskip("torch")
 
+
 def _build_model():
     import torch.nn as nn
     import probly.transformation.evidential.regression as er
@@ -9,20 +10,26 @@ def _build_model():
 
     if hasattr(er, "EvidentialRegression"):
         try:
-            return er.EvidentialRegression(backbone)          
+            return er.EvidentialRegression(backbone)
         except TypeError:
-            return er.EvidentialRegression(backbone=backbone) 
+            return er.EvidentialRegression(backbone=backbone)
 
     if hasattr(er, "make_evidential_regression"):
         return er.make_evidential_regression(backbone=backbone)
 
-    pytest.skip("Kein Konstruktor gefunden：Bitte den Name in _build_model() auf den tatsächlich exportierte Projekt von API ändern")
+    pytest.skip(
+        "Kein Konstruktor gefunden: Bitte den Namen in _build_model() auf die "
+        "tatsächlich exportierte API des Projekts anpassen."
+    )
+
 
 def test_forward_shapes():
     import torch
+
     model = _build_model()
     model.eval()
     x = torch.randn(8, 1)
+
     with torch.no_grad():
         out = model(x)
 
@@ -30,11 +37,12 @@ def test_forward_shapes():
         for k in ["mu", "v", "alpha", "beta"]:
             assert k in out, f"fehlt {k}"
             assert out[k].shape == x.shape
-           
             if k in ("v", "beta"):
                 assert (out[k] > 0).all()
     else:
-        assert hasattr(out, "mean")
-        assert out.mean.shape == x.shape
+        m = out.mean() if callable(getattr(out, "mean", None)) else getattr(out, "mean", None)
+        assert m is not None, "Kein mean von zurückgegebene Objekt"
+        assert m.shape == x.shape
+
 
 
