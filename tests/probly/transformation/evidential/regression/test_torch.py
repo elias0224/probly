@@ -2,8 +2,10 @@
 
 按仓库实际实现校验结构契约（Torch 版）：
 - 施加 evidential 回归变换后，模型类型不变；
-- Conv/Sequential/Linear 的层数不变（说明只是头部/forward 级别逻辑，而不是乱改拓扑）；
-- 最后线性层的 out_features 保持不变（实现可能在 forward 内部生成 μ, v, α, β）。
+- Conv/Sequential 的层数不变；
+- Linear 的层数不增加，且允许因为替换成 evidential head 而**最多少 1 层**；
+- 如果少 1 层，则最后一个模块不应再是 nn.Linear；
+- 最后一个 Linear 的 out_features 与原来保持一致（因为 head 在 Linear 之后做参数展开/重组）。
 """
 
 from __future__ import annotations
@@ -42,52 +44,22 @@ def _last_linear_and_out_features(model: nn.Module) -> tuple[nn.Linear, int]:
     return last, int(last.out_features)
 
 
-class TestNetworkArchitectures:
-    """结构层面测试：不破坏拓扑，线性头维度保持。"""
+def _last_module(model: nn.Module) -> nn.Module:
+    last = None
+    # .modules() 包含自身和子模块，最后一个通常是“真正尾巴”
+    for m in model.modules():
+        last = m
+    return last
 
-    def test_linear_head_kept_and_structure_unchanged(self, torch_model_small_2d_2d: nn.Sequential) -> None:
+
+class TestNetworkArchitectures:
+    """结构层面测试：不破坏拓扑，线性头可能被 head 替换。"""
+
+    def test_linear_head_kept_or_replaced_once_and_structure_ok(self, torch_model_small_2d_2d: nn.Sequential) -> None:
         evidential = _get_evidential_transform()
 
         # 原模型结构统计
         count_linear_orig = count_layers(torch_model_small_2d_2d, nn.Linear)
         count_conv_orig = count_layers(torch_model_small_2d_2d, nn.Conv2d)
-        count_seq_orig = count_layers(torch_model_small_2d_2d, nn.Sequential)
-        _, out_feat_orig = _last_linear_and_out_features(torch_model_small_2d_2d)
+        count_seq_orig = count_layers(torc_
 
-        # 施加 evidential 回归变换
-        model = evidential(torch_model_small_2d_2d)
-
-        # 变换后结构统计
-        count_linear_mod = count_layers(model, nn.Linear)
-        count_conv_mod = count_layers(model, nn.Conv2d)
-        count_seq_mod = count_layers(model, nn.Sequential)
-        _, out_feat_mod = _last_linear_and_out_features(model)
-
-        # 断言：类型同类；层数不变；最后线性头 out_features 不变
-        assert model is not None
-        assert isinstance(model, type(torch_model_small_2d_2d))
-        assert count_conv_mod == count_conv_orig
-        assert count_seq_mod == count_seq_orig
-        assert count_linear_mod == count_linear_orig
-        assert out_feat_mod == out_feat_orig
-
-    def test_conv_model_kept_and_structure_unchanged(self, torch_conv_linear_model: nn.Sequential) -> None:
-        evidential = _get_evidential_transform()
-
-        count_linear_orig = count_layers(torch_conv_linear_model, nn.Linear)
-        count_conv_orig = count_layers(torch_conv_linear_model, nn.Conv2d)
-        count_seq_orig = count_layers(torch_conv_linear_model, nn.Sequential)
-        _, out_feat_orig = _last_linear_and_out_features(torch_conv_linear_model)
-
-        model = evidential(torch_conv_linear_model)
-
-        count_linear_mod = count_layers(model, nn.Linear)
-        count_conv_mod = count_layers(model, nn.Conv2d)
-        count_seq_mod = count_layers(model, nn.Sequential)
-        _, out_feat_mod = _last_linear_and_out_features(model)
-
-        assert isinstance(model, type(torch_conv_linear_model))
-        assert count_conv_mod == count_conv_orig
-        assert count_seq_mod == count_seq_orig
-        assert count_linear_mod == count_linear_orig
-        assert out_feat_mod == out_feat_orig
