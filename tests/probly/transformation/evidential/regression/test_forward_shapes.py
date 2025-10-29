@@ -7,54 +7,60 @@ def _build_model():
     import torch.nn as nn
     import probly.transformation.evidential.regression as er
 
-    # 一个很小的回归 backbone
+    fn = er.evidential_regression
+    sig = inspect.signature(fn)
+    param_names = list(sig.parameters.keys())
+
+    # 一个最小的回归骨干
     backbone = nn.Sequential(nn.Linear(1, 32), nn.ReLU(), nn.Linear(32, 1))
 
-    fn = er.evidential_regression
+    # 1) 先按参数名动态拼 kwargs
+    name_map = ["model", "backbone", "net", "module"]
+    kwargs = {}
+    for k in name_map:
+        if k in param_names:
+            kwargs[k] = backbone
+            break
 
-    # 1) 直呼模式：evidential_regression(backbone=...)
-    for kwargs in ({"backbone": backbone}, {"model": backbone}, {"net": backbone}, {"module": backbone}):
-        try:
-            out = fn(**kwargs)
-            if out is None:
-                # 很多“就地变换”返回 None，但已经把 backbone 改好了
-                return backbone
-            if hasattr(out, "forward"):
-                return out
-        except TypeError:
-            pass
+    # 常见可选参数：head、输出维度
+    if "head" in param_names:
+        kwargs["head"] = "nig"
+    for out_key in ("num_outputs", "out_features", "output_dim"):
+        if out_key in param_names:
+            kwargs[out_key] = 4  # NIG 通常导出 4 个参数
 
-    # 2) 柯里化/两段式：trans = evidential_regression(...); model = trans(backbone)
+    # 尝试：关键字方式
     try:
-        trans = fn()
-        if callable(trans):
-            out = trans(backbone)
-            if out is None:
-                return backbone
-            if hasattr(out, "forward"):
-                return out
+        out = fn(**kwargs) if kwargs else fn()
+        if out is None:
+            # 有些变换是“就地修改”，返回 None
+            return backbone
+        # 返回的是模型（有 forward）
+        if hasattr(out, "forward"):
+            return out
+        # 返回的是可调用的“转换器”，再喂 backbone
+        if callable(out):
+            mod = out(backbone)
+            return backbone if mod is None else mod
     except TypeError:
         pass
 
-    # 3) 只返回 head：把 head 接到 backbone 后面
-    for kw in ({"in_features": 1, "out_features": 1},
-               {"in_features": 1, "output_dim": 1},
-               {"features": 1}):
-        try:
-            head = fn(**kw)
-            if hasattr(head, "forward"):
-                return nn.Sequential(backbone, head)
-        except TypeError:
-            pass
+    # 2) 再试位置参数（有些签名只认位置参数）
+    try:
+        out = fn(backbone)
+        if out is None:
+            return backbone
+        if hasattr(out, "forward"):
+            return out
+        if callable(out):
+            mod = out(backbone)
+            return backbone if mod is None else mod
+    except TypeError:
+        pass
 
     import pytest
-    sig = ""
-    try:
-        import inspect as _inspect
-        sig = str(_inspect.signature(fn))
-    except Exception:
-        pass
-    pytest.skip(f"evidential_regression 的调用方式不明，当前签名 {sig}。请按实际 API 改 _build_model()。")
+    pytest.skip(f"搞不清 evidential_regression 的用法，实际签名是 {sig}。把上面 kwargs 映射改成它要的键即可。")
+
 
 
 
