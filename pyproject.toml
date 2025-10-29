@@ -224,9 +224,5 @@ disallow_untyped_calls = false   # to avoid issues with using torch, numpy, scip
 disable_error_code = "misc"      # disable errors caused by torch not typing decorators, wrapping would be overkill
 exclude = "docs"
 
-[tool.pytest.ini_options]
-filterwarnings = [
-  "ignore:'_object__nodes' is deprecated:DeprecationWarning",
-  "ignore:'_object__state' is deprecated:DeprecationWarning",
-]
+
 
