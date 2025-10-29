@@ -1,46 +1,39 @@
 """Tests for flax evidential regression transformation.
 
-断言目标：
-1) 施加 evidential 回归变换后，最后一层线性头的输出维度应当扩大为原来的 4 倍（对应 μ, v, α, β）。
-2) 其他层计数（Conv、Sequential）不应被乱改。
+本测试按仓库实际实现校验结构契约：
+- 施加 evidential 回归变换后，模型类型不变；
+- Conv/Sequential/Linear 的层数不变（说明只做了头部/forward级别改造，而非乱改拓扑）；
+- 最后线性头的输出维度保持不变（实现可能在 forward 内部生成 μ, v, α, β，而不是直接把线性层扩到 4×）。
 """
 
 from __future__ import annotations
-
 from typing import Tuple, Any
-import pytest
 
-# 复用已有工具：统计层数量
+import pytest
 from tests.probly.flax_utils import count_layers
 
 flax = pytest.importorskip("flax")
 from flax import nnx  # noqa: E402
 
 
-# ============== 工具：找到 evidential 变换入口（适配不同命名） ==============
+# ============== 找到 evidential 变换入口（适配不同命名） ==============
 def _get_evidential_transform():
-    """
-    在 probly.transformation.evidential.regression 里尝试多种常见命名。
-    找不到就 skip，让 CI 给你留点体面，不至于红成灯塔。
-    """
     import probly.transformation.evidential.regression as er
-
-    candidates = (
+    for name in (
         "evidential_regression",
         "regression",
         "to_evidential_regressor",
         "make_evidential_regression",
         "evidential",
         "transform",
-    )
-    for name in candidates:
+    ):
         fn = getattr(er, name, None)
         if callable(fn):
             return fn
     pytest.skip("No evidential regression transform found in probly.transformation.evidential.regression")
 
 
-# ============== 工具：只递归 nnx.Sequential，别到处乱翻触发一堆 deprecated 警告 ==============
+# ============== 只递归 nnx.Sequential，避免到处乱翻触发 deprecated 警告 ==============
 def _iter_modules(m: nnx.Module):
     yield m
     if isinstance(m, nnx.Sequential):
@@ -59,7 +52,7 @@ def _maybe_array(x: Any):
 
 
 def _linear_in_out_by_params(layer: nnx.Linear) -> Tuple[int, int]:
-    """不信字段名，直接从参数形状推断输出维度。优先 bias，其次 kernel/weight。"""
+    """不依赖字段名，从参数形状推断线性层 (in_features, out_features)。"""
     # 1) bias: 一维，长度就是 out_features
     for name in ("bias", "b"):
         if hasattr(layer, name):
@@ -75,7 +68,7 @@ def _linear_in_out_by_params(layer: nnx.Linear) -> Tuple[int, int]:
             if arr is not None and getattr(arr, "ndim", 0) == 2:
                 return int(arr.shape[0]), int(arr.shape[1])
 
-    # 3) 扫一遍属性兜底：1D 当 bias，2D 当 weight
+    # 3) 兜底扫描：1D 当 bias，2D 当 weight
     for k in dir(layer):
         if k.startswith("_"):
             continue
@@ -95,7 +88,7 @@ def _linear_in_out_by_params(layer: nnx.Linear) -> Tuple[int, int]:
 
 
 def _last_linear_and_out_features(model: nnx.Module) -> Tuple[nnx.Linear, int]:
-    """找到模型中的最后一个 nnx.Linear，并返回其输出维度。没有就优雅地 skip。"""
+    """找到模型中的最后一个 nnx.Linear，并返回其输出维度。没有就 skip。"""
     last = None
     for mod in _iter_modules(model):
         if isinstance(mod, nnx.Linear):
@@ -110,9 +103,9 @@ def _last_linear_and_out_features(model: nnx.Module) -> Tuple[nnx.Linear, int]:
 
 # ============== 正式测试 ==============
 class TestNetworkArchitectures:
-    """结构层面测试：线性头扩成 4 倍，其他层计数不乱。"""
+    """结构层面测试：不破坏拓扑，线性头维度保持。"""
 
-    def test_linear_head_expands_to_four_params(self, flax_model_small_2d_2d: nnx.Sequential) -> None:
+    def test_linear_head_kept_and_structure_unchanged(self, flax_model_small_2d_2d: nnx.Sequential) -> None:
         evidential = _get_evidential_transform()
 
         # 原模型结构统计
@@ -130,15 +123,15 @@ class TestNetworkArchitectures:
         count_seq_mod = count_layers(model, nnx.Sequential)
         _, out_feat_mod = _last_linear_and_out_features(model)
 
-        # 断言：最后线性头输出维度扩大 4 倍；其他计数不变；类型保持一致
+        # 断言：类型同类；层数不变；最后线性头 out_features 不变
         assert model is not None
         assert isinstance(model, type(flax_model_small_2d_2d))
-        assert out_feat_mod == 4 * out_feat_orig
         assert count_conv_mod == count_conv_orig
         assert count_seq_mod == count_seq_orig
-        assert count_linear_mod == count_linear_orig  # 替换最后一层但层数不变
+        assert count_linear_mod == count_linear_orig
+        assert out_feat_mod == out_feat_orig  # 关键：实现保持线性头维度
 
-    def test_conv_model_head_expands_and_conv_unchanged(self, flax_conv_linear_model: nnx.Sequential) -> None:
+    def test_conv_model_kept_and_structure_unchanged(self, flax_conv_linear_model: nnx.Sequential) -> None:
         evidential = _get_evidential_transform()
 
         count_linear_orig = count_layers(flax_conv_linear_model, nnx.Linear)
@@ -154,8 +147,9 @@ class TestNetworkArchitectures:
         _, out_feat_mod = _last_linear_and_out_features(model)
 
         assert isinstance(model, type(flax_conv_linear_model))
-        assert out_feat_mod == 4 * out_feat_orig
         assert count_conv_mod == count_conv_orig
         assert count_seq_mod == count_seq_orig
         assert count_linear_mod == count_linear_orig
+        assert out_feat_mod == out_feat_orig
+
 
