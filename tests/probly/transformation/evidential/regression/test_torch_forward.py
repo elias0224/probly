@@ -48,6 +48,16 @@ def _last_linear_out_features(model: nn.Module) -> int:
     return int(last.out_features)
 
 
+def _first_conv_spec(model: nn.Module) -> tuple[int, int, int]:
+    """返回第一层 Conv2d 的 (in_channels, kH, kW)。没有就 skip。"""
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            k = m.kernel_size
+            kH, kW = (k, k) if isinstance(k, int) else k
+            return int(m.in_channels), int(kH), int(kW)
+    pytest.skip("Fixture model has no nn.Conv2d; conv-forward test not applicable")
+
+
 def _unpack_four(y):
     """尽可能解出 mu, v, alpha, beta。兼容 dict / 对象属性 / 拼接张量三种形态。"""
     if isinstance(y, dict):
@@ -94,7 +104,6 @@ class TestTorchForward:
         for t in (mu, v, alpha, beta):
             assert torch.is_tensor(t), "Each output head must be a tensor"
             assert t.shape[-1] == out_dim, f"Expected last dim {out_dim}, got {t.shape[-1]}"
-            # batch 维度宽松匹配：允许中间有额外维度，至少 batch 大小一致
             assert t.shape[0] == B, f"Expected batch {B}, got {t.shape[0]}"
 
         # 数值健壮性：必须是有限值
@@ -106,24 +115,23 @@ class TestTorchForward:
             if torch.is_floating_point(t):
                 assert (t > 0).all(), f"{name} must be positive"
             else:
-                # 非浮点的奇葩情况，直接失败，evidential 参数不该是整型
                 pytest.fail(f"{name} has non-floating dtype: {t.dtype}")
 
     def test_forward_conv_model(self, torch_conv_linear_model: nn.Sequential) -> None:
         evidential = _get_evidential_transform()
         base = torch_conv_linear_model
 
-        in_dim = _first_linear_in_features(base)  # 线性尾部输入维度
+        # 从第一层 Conv2d 读出通道数与 kernel size，构造最小合法输入。
+        C, kH, kW = _first_conv_spec(base)
         out_dim = _last_linear_out_features(base)
 
         model = evidential(base)
         model.eval()
 
-        # 简易输入：避开卷积的输入细节，直接在进入线性层之前打平是模型自己的事；
-        # 这里我们提供一个最小可行 batch，很多 Sequential 会自动展平。
         B = 4
-        # 给个“看起来像特征”的二维输入。如果模型真的需要图片形状，fixture 应该自带 Flatten。
-        x = torch.randn(B, in_dim)
+        # 选择 H=W=kernel_size，配合 stride=1, padding=0，Conv 输出空间大小为 1x1，
+        # 后续 Flatten -> Linear 的 in_features 就等于 out_channels（fixture 里正好是 5）
+        x = torch.randn(B, C, kH, kW)
 
         with torch.no_grad():
             y = model(x)
@@ -138,3 +146,4 @@ class TestTorchForward:
 
         for name, t in zip(("v", "alpha", "beta"), (v, alpha, beta)):
             assert torch.is_floating_point(t) and (t > 0).all(), f"{name} must be positive"
+
