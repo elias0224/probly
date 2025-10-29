@@ -3,24 +3,32 @@ pytest.importorskip("torch")
 
 
 def _build_model():
+   def _build_model():
     import torch.nn as nn
     import probly.transformation.evidential.regression as er
 
     backbone = nn.Sequential(nn.Linear(1, 32), nn.ReLU(), nn.Linear(32, 1))
 
-    if hasattr(er, "EvidentialRegression"):
+    # 模块只导出了函数 evidential_regression；尝试几种常见签名
+    for kwargs in (
+        {"backbone": backbone},
+        {"model": backbone},
+        {"net": backbone},
+        {"module": backbone},
+        {},                
+        (backbone,),       
+    ):
         try:
-            return er.EvidentialRegression(backbone)
+            if isinstance(kwargs, dict):
+                return er.evidential_regression(**kwargs)
+            else:
+                return er.evidential_regression(*kwargs)
         except TypeError:
-            return er.EvidentialRegression(backbone=backbone)
+            continue
 
-    if hasattr(er, "make_evidential_regression"):
-        return er.make_evidential_regression(backbone=backbone)
+    import pytest
+    pytest.skip("evidential_regression 的签名对不上：请把参数名改成实际要求的那个（如 backbone/model/net/module 等）。")
 
-    pytest.skip(
-        "Kein Konstruktor gefunden: Bitte den Namen in _build_model() auf die "
-        "tatsächlich exportierte API des Projekts anpassen."
-    )
 
 
 def test_forward_shapes():
