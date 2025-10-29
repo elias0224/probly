@@ -59,45 +59,45 @@ def _first_conv_spec(model: nn.Module) -> tuple[int, int, int]:
 
 
 def _try_unpack(y):
-    """尝试把各种返回风格解成 (mu, v, alpha, beta)。解不出来就返回 None。"""
-    # 1) dict
+    """递归把各种返回风格解成 (mu, v, alpha, beta)。
+    支持：dict / 对象属性 / tuple/list/namedtuple 任意深度嵌套 / 单张量按最后一维等分 4 份。
+    """
+    target = ("mu", "v", "alpha", "beta")
+
+    # 1) 直接命中：dict 里有四键
     if isinstance(y, dict):
-        keys = {"mu", "v", "alpha", "beta"}
-        if keys.issubset(y.keys()):
+        if all(k in y for k in target):
             return y["mu"], y["v"], y["alpha"], y["beta"]
-
-    # 2) 具名属性对象
-    if all(hasattr(y, k) for k in ("mu", "v", "alpha", "beta")):
-        return y.mu, y.v, y.alpha, y.beta
-
-    # 3) tuple/list：常见三种
-    if isinstance(y, (tuple, list)):
-        # a) (pred, aux...)：先尝第一项
-        if len(y) >= 1:
-            out = _try_unpack(y[0])
+        # 递归搜子项
+        for v in y.values():
+            out = _try_unpack(v)
             if out is not None:
                 return out
-        # b) 四个头分开：长度为 4 且都是张量
+
+    # 2) 对象属性
+    if all(hasattr(y, k) for k in target):
+        return y.mu, y.v, y.alpha, y.beta
+
+    # 3) 可迭代容器
+    if isinstance(y, (tuple, list)):
+        # 3a) (mu, v, alpha, beta) 直接摆四个张量
         if len(y) == 4 and all(torch.is_tensor(t) for t in y):
             return y[0], y[1], y[2], y[3]
-        # c) 再兜底一遍：里头有没有 dict/对象可解
+        # 3b) 递归每个元素
         for item in y:
             out = _try_unpack(item)
             if out is not None:
                 return out
 
-    # 4) 单个张量：最后一维能被 4 整除就切
-    if torch.is_tensor(y):
-        if y.ndim >= 2:
-            D = y.shape[-1]
-            if D % 4 == 0:
-                split = D // 4
-                return torch.split(y, split, dim=-1)
-        return None
+    # 4) 单个张量，最后一维能整除 4 就切
+    if torch.is_tensor(y) and y.ndim >= 2:
+        D = y.shape[-1]
+        if D % 4 == 0:
+            split = D // 4
+            return torch.split(y, split, dim=-1)
 
     return None
-
-
+    
 def _unpack_four(y):
     out = _try_unpack(y)
     if out is None:
