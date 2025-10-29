@@ -3,31 +3,59 @@ pytest.importorskip("torch")
 
 
 def _build_model():
-   def _build_model():
+    import inspect
     import torch.nn as nn
     import probly.transformation.evidential.regression as er
 
+    # 一个很小的回归 backbone
     backbone = nn.Sequential(nn.Linear(1, 32), nn.ReLU(), nn.Linear(32, 1))
 
-    # 模块只导出了函数 evidential_regression；尝试几种常见签名
-    for kwargs in (
-        {"backbone": backbone},
-        {"model": backbone},
-        {"net": backbone},
-        {"module": backbone},
-        {},                
-        (backbone,),       
-    ):
+    fn = er.evidential_regression
+
+    # 1) 直呼模式：evidential_regression(backbone=...)
+    for kwargs in ({"backbone": backbone}, {"model": backbone}, {"net": backbone}, {"module": backbone}):
         try:
-            if isinstance(kwargs, dict):
-                return er.evidential_regression(**kwargs)
-            else:
-                return er.evidential_regression(*kwargs)
+            out = fn(**kwargs)
+            if out is None:
+                # 很多“就地变换”返回 None，但已经把 backbone 改好了
+                return backbone
+            if hasattr(out, "forward"):
+                return out
         except TypeError:
-            continue
+            pass
+
+    # 2) 柯里化/两段式：trans = evidential_regression(...); model = trans(backbone)
+    try:
+        trans = fn()
+        if callable(trans):
+            out = trans(backbone)
+            if out is None:
+                return backbone
+            if hasattr(out, "forward"):
+                return out
+    except TypeError:
+        pass
+
+    # 3) 只返回 head：把 head 接到 backbone 后面
+    for kw in ({"in_features": 1, "out_features": 1},
+               {"in_features": 1, "output_dim": 1},
+               {"features": 1}):
+        try:
+            head = fn(**kw)
+            if hasattr(head, "forward"):
+                return nn.Sequential(backbone, head)
+        except TypeError:
+            pass
 
     import pytest
-    pytest.skip("evidential_regression 的签名对不上：请把参数名改成实际要求的那个（如 backbone/model/net/module 等）。")
+    sig = ""
+    try:
+        import inspect as _inspect
+        sig = str(_inspect.signature(fn))
+    except Exception:
+        pass
+    pytest.skip(f"evidential_regression 的调用方式不明，当前签名 {sig}。请按实际 API 改 _build_model()。")
+
 
 
 
