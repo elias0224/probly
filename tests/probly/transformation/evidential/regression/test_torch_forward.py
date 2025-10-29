@@ -1,18 +1,9 @@
-"""Forward smoke tests for torch evidential regression.
-
-目标：
-- 变换后的模型能跑 forward，不抛异常；
-- 输出要么是字典/对象包含 {mu, v, alpha, beta}，要么是 (B, 4 * out_dim) 的张量；
-- 兼容 tuple/list/namedtuple 之类的返回（比如 (pred, aux) 或四个头分开返回）；
-- 若能解出四元参数，则检查形状一致且 v/alpha/beta 为正、均为有限值。
-"""
-
 from __future__ import annotations
 
 import pytest
 
 torch = pytest.importorskip("torch")
-from torch import nn  # noqa: E402
+from torch import nn  
 
 
 def _get_evidential_transform():
@@ -49,7 +40,6 @@ def _last_linear_out_features(model: nn.Module) -> int:
 
 
 def _first_conv_spec(model: nn.Module) -> tuple[int, int, int]:
-    """返回第一层 Conv2d 的 (in_channels, kH, kW)。没有就 skip。"""
     for m in model.modules():
         if isinstance(m, nn.Conv2d):
             k = m.kernel_size
@@ -59,37 +49,26 @@ def _first_conv_spec(model: nn.Module) -> tuple[int, int, int]:
 
 
 def _try_unpack(y):
-    """递归把各种返回风格解成 (mu, v, alpha, beta)。
-    支持：dict / 对象属性 / tuple/list/namedtuple 任意深度嵌套 / 单张量按最后一维等分 4 份。
-    """
     target = ("mu", "v", "alpha", "beta")
 
-    # 1) 直接命中：dict 里有四键
     if isinstance(y, dict):
         if all(k in y for k in target):
             return y["mu"], y["v"], y["alpha"], y["beta"]
-        # 递归搜子项
         for v in y.values():
             out = _try_unpack(v)
             if out is not None:
                 return out
-
-    # 2) 对象属性
     if all(hasattr(y, k) for k in target):
         return y.mu, y.v, y.alpha, y.beta
 
-    # 3) 可迭代容器
     if isinstance(y, (tuple, list)):
-        # 3a) (mu, v, alpha, beta) 直接摆四个张量
         if len(y) == 4 and all(torch.is_tensor(t) for t in y):
             return y[0], y[1], y[2], y[3]
-        # 3b) 递归每个元素
         for item in y:
             out = _try_unpack(item)
             if out is not None:
                 return out
 
-    # 4) 单个张量，最后一维能整除 4 就切
     if torch.is_tensor(y) and y.ndim >= 2:
         D = y.shape[-1]
         if D % 4 == 0:
@@ -124,17 +103,14 @@ class TestTorchForward:
 
         mu, v, alpha, beta = _unpack_four(y)
 
-        # 形状一致性：四个头的最后一维等于 out_dim
         for t in (mu, v, alpha, beta):
             assert torch.is_tensor(t), "Each output head must be a tensor"
             assert t.shape[-1] == out_dim, f"Expected last dim {out_dim}, got {t.shape[-1]}"
             assert t.shape[0] == B, f"Expected batch {B}, got {t.shape[0]}"
-
-        # 数值健壮性：必须是有限值
+            
         for name, t in zip(("mu", "v", "alpha", "beta"), (mu, v, alpha, beta)):
             assert torch.isfinite(t).all(), f"{name} contains non-finite values"
 
-        # 正性约束：v、alpha、beta 应为正
         for name, t in zip(("v", "alpha", "beta"), (v, alpha, beta)):
             if torch.is_floating_point(t):
                 assert (t > 0).all(), f"{name} must be positive"
@@ -145,7 +121,6 @@ class TestTorchForward:
         evidential = _get_evidential_transform()
         base = torch_conv_linear_model
 
-        # 从第一层 Conv2d 读出通道数与 kernel size，构造最小合法输入。
         C, kH, kW = _first_conv_spec(base)
         out_dim = _last_linear_out_features(base)
 
