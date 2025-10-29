@@ -61,5 +61,62 @@ class TestNetworkArchitectures:
         # 原模型结构统计
         count_linear_orig = count_layers(torch_model_small_2d_2d, nn.Linear)
         count_conv_orig = count_layers(torch_model_small_2d_2d, nn.Conv2d)
-        count_seq_orig = count_layers(torc_
+        count_seq_orig = count_layers(torch_model_small_2d_2d, nn.Sequential)
+        _, out_feat_orig = _last_linear_and_out_features(torch_model_small_2d_2d)
+
+        # 施加 evidential 回归变换
+        model = evidential(torch_model_small_2d_2d)
+
+        # 变换后结构统计
+        count_linear_mod = count_layers(model, nn.Linear)
+        count_conv_mod = count_layers(model, nn.Conv2d)
+        count_seq_mod = count_layers(model, nn.Sequential)
+        _, out_feat_mod = _last_linear_and_out_features(model)
+
+        # 断言：类型同类；Conv/Sequential 不变
+        assert model is not None
+        assert isinstance(model, type(torch_model_small_2d_2d))
+        assert count_conv_mod == count_conv_orig
+        assert count_seq_mod == count_seq_orig
+
+        # 线性层不增加，且与原来最多差 1
+        assert count_linear_mod <= count_linear_orig
+        assert (count_linear_orig - count_linear_mod) in (0, 1)
+
+        # 若少了一层，确认最后一个模块确实不是 nn.Linear（说明被 evidential head 替换）
+        if count_linear_mod == count_linear_orig - 1:
+            tail = _last_module(model)
+            assert not isinstance(tail, nn.Linear)
+
+        # 无论是否替换，模型中“最后一个 Linear”的 out_features 应保持一致
+        assert out_feat_mod == out_feat_orig
+
+    def test_conv_model_kept_or_replaced_once_and_structure_ok(self, torch_conv_linear_model: nn.Sequential) -> None:
+        evidential = _get_evidential_transform()
+
+        count_linear_orig = count_layers(torch_conv_linear_model, nn.Linear)
+        count_conv_orig = count_layers(torch_conv_linear_model, nn.Conv2d)
+        count_seq_orig = count_layers(torch_conv_linear_model, nn.Sequential)
+        _, out_feat_orig = _last_linear_and_out_features(torch_conv_linear_model)
+
+        model = evidential(torch_conv_linear_model)
+
+        count_linear_mod = count_layers(model, nn.Linear)
+        count_conv_mod = count_layers(model, nn.Conv2d)
+        count_seq_mod = count_layers(model, nn.Sequential)
+        _, out_feat_mod = _last_linear_and_out_features(model)
+
+        assert isinstance(model, type(torch_conv_linear_model))
+        assert count_conv_mod == count_conv_orig
+        assert count_seq_mod == count_seq_orig
+
+        assert count_linear_mod <= count_linear_orig
+        assert (count_linear_orig - count_linear_mod) in (0, 1)
+
+        if count_linear_mod == count_linear_orig - 1:
+            tail = _last_module(model)
+            assert not isinstance(tail, nn.Linear)
+
+        assert out_feat_mod == out_feat_orig
+
 
