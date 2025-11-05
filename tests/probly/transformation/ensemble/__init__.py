@@ -1,1 +1,1 @@
-"""Test for ensemble module."""
+"""Tests for ensemble transformation module."""
