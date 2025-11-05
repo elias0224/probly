@@ -23,9 +23,9 @@ def _reset_copy(module: nn.Module) -> nn.Module:
     return traverse(module, nn_compose(reset_traverser), init={CLONE: True})
 
 
-def generate_torch_ensemble(obj: nn.Module, n_members: int) -> nn.ModuleList:
+def generate_torch_ensemble(obj: nn.Module, num_members: int) -> nn.ModuleList:
     """Build a torch ensemble by copying the base model n_members times."""
-    return nn.ModuleList([_reset_copy(obj) for _ in range(n_members)])
+    return nn.ModuleList([_reset_copy(obj) for _ in range(num_members)])
 
 
 register(nn.Module, generate_torch_ensemble)
