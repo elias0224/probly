@@ -373,7 +373,7 @@
 
 
 <span class="nd">@lazydispatch</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">ensemble_generator</span><span class="p">[</span><span class="n">In</span><span class="p">,</span> <span class="n">KwIn</span><span class="p">,</span> <span class="n">Out</span><span class="p">](</span><span class="n">base</span><span class="p">:</span> <span class="n">Predictor</span><span class="p">[</span><span class="n">In</span><span class="p">,</span> <span class="n">KwIn</span><span class="p">,</span> <span class="n">Out</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Predictor</span><span class="p">[</span><span class="n">In</span><span class="p">,</span> <span class="n">KwIn</span><span class="p">,</span> <span class="n">Out</span><span class="p">]:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">ensemble_generator</span><span class="p">[</span><span class="n">In</span><span class="p">,</span> <span class="n">KwIn</span><span class="p">,</span> <span class="n">Out</span><span class="p">](</span><span class="n">base</span><span class="p">:</span> <span class="n">Predictor</span><span class="p">[</span><span class="n">In</span><span class="p">,</span> <span class="n">KwIn</span><span class="p">,</span> <span class="n">Out</span><span class="p">],</span> <span class="n">num_members</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Predictor</span><span class="p">[</span><span class="n">In</span><span class="p">,</span> <span class="n">KwIn</span><span class="p">,</span> <span class="n">Out</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate an ensemble from a base model.&quot;&quot;&quot;</span>
     <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;No ensemble generator is registered for type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">base</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
     <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
@@ -397,7 +397,7 @@
 <span class="sd">    Returns:</span>
 <span class="sd">        Predictor, The ensemble predictor.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">ensemble_generator</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">n_members</span><span class="o">=</span><span class="n">num_members</span><span class="p">,</span> <span class="n">reset_params</span><span class="o">=</span><span class="n">reset_params</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">ensemble_generator</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="n">num_members</span><span class="o">=</span><span class="n">num_members</span><span class="p">,</span> <span class="n">reset_params</span><span class="o">=</span><span class="n">reset_params</span><span class="p">)</span></div>
 
 </pre></div>
         </article>
