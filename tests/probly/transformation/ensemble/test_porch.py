@@ -10,8 +10,8 @@ from tests.probly.torch_utils import count_layers
 
 
 def test_linear_network_with_first_linear(torch_model_small_2d_2d: nn.Sequential) -> None:
-    n_members = 5
-    model = ensemble(torch_model_small_2d_2d, n_members)
+    num_members = 5
+    model = ensemble(torch_model_small_2d_2d, num_members)
 
     # count
     count_linear_original = count_layers(torch_model_small_2d_2d, nn.Linear)
@@ -26,8 +26,8 @@ def test_linear_network_with_first_linear(torch_model_small_2d_2d: nn.Sequential
 
 
 def test_convolutional_network(torch_conv_linear_model: nn.Sequential) -> None:
-    n_members = 5
-    model = ensemble(torch_conv_linear_model, n_members)
+    num_members = 5
+    model = ensemble(torch_conv_linear_model, num_members)
 
     # count
     count_linear_original = count_layers(torch_conv_linear_model, nn.Linear)
@@ -58,7 +58,7 @@ class DummyModel(nn.Module):
 
 def test_reset_copys() -> None:
     base = DummyModel()
-    n_members = 3
+    num_members = 3
 
     genmod = generate_torch_ensemble(base, num_members)
 
