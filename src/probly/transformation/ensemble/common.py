@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 @lazydispatch
-def ensemble_generator[In, KwIn, Out](base: Predictor[In, KwIn, Out], n_members: int) -> Predictor[In, KwIn, Out]:
+def ensemble_generator[In, KwIn, Out](base: Predictor[In, KwIn, Out], num_members: int) -> Predictor[In, KwIn, Out]:
     """Generate an ensemble from a base model."""
     msg = f"No ensemble generator is registered for type {type(base)}"
     raise NotImplementedError(msg)
@@ -35,4 +35,4 @@ def ensemble[T: Predictor](base: T, n_members: int) -> T:
     Returns:
         Predictor, The ensemble predictor.
     """
-    return ensemble_generator(base, n_members=n_members)
+    return ensemble_generator(base, num_members=num_members)
