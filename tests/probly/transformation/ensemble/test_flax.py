@@ -170,23 +170,14 @@ class TestParameters:
                 assert jnp.array_equal(orig, memb)
 
     def test_parameters_linear_network_with_reset(self, flax_model_small_2d_2d: nnx.Sequential) -> None:
-        """Tests that parameters are the the same reseeded when reset_params is True."""
+        """Tests that parameters are the the same."""
         num_members = 3
-        model = ensemble(flax_model_small_2d_2d, num_members=num_members, reset_params=True)
-
-        dummy = jnp.ones((1, 2))
-
+        model1 = ensemble(flax_model_small_2d_2d, num_members=num_members, reset_params=True)
+        model2 = ensemble(flax_model_small_2d_2d, num_members=num_members, reset_params=True)
         for i in range(num_members - 1):
-            nnx.reseed(flax_model_small_2d_2d, policy="match_shape", rng=jax.random.PRNGKey(i))
-            reseeded_flax_model_small_2d_2d = flax_model_small_2d_2d(dummy)
-            reseed_model = model[i](dummy)
-
-            _, random_params = nnx.split(reseeded_flax_model_small_2d_2d)
-            _, member_params = nnx.split(reseed_model)
-
             for reseed, memb in zip(
-                jax.tree_util.tree_leaves(random_params),
-                jax.tree_util.tree_leaves(member_params),
+                jax.tree_util.tree_leaves(model1[i]),
+                jax.tree_util.tree_leaves(model2[i]),
                 strict=False,
             ):
                 assert jnp.array_equal(reseed, memb)
@@ -207,27 +198,19 @@ class TestParameters:
             ):
                 assert jnp.array_equal(orig, memb)
 
-    """
     def test_parameters_conv_linear_network_with_reset(self, flax_conv_linear_model: nnx.Sequential) -> None:
-
+        """Tests that parameters are the same."""
         num_members = 3
-        model= ensemble(flax_conv_linear_model, num_members=num_members, reset_params=True)
-
-        dummy = jnp.zeros((1, 5, 5, 3), dtype=jnp.float32)  # type: ignore
+        model1 = ensemble(flax_conv_linear_model, num_members=num_members, reset_params=True)
+        model2 = ensemble(flax_conv_linear_model, num_members=num_members, reset_params=True)
 
         for i in range(num_members - 1):
-
-            nnx.reseed(flax_conv_linear_model, policy='match_shape', rng=jax.random.PRNGKey(i))
-
-            reseeded_flax_conv_model = flax_conv_linear_model(dummy)  # type: ignore
-            reseed_model = model[i](dummy)  # type: ignore
-
-            _, reseed_params = nnx.split(reseeded_flax_conv_model)
-            _, member_params= nnx.split(reseed_model)
-
-            for reseed, memb in zip(jax.tree_util.tree_leaves(reseed_params), jax.tree_util.tree_leaves(member_params)):
+            for reseed, memb in zip(
+                jax.tree_util.tree_leaves(model1[i]),
+                jax.tree_util.tree_leaves(model2[i]),
+                strict=False,
+            ):
                 assert jnp.array_equal(reseed, memb)
-    """
 
     def test_parameters_custom_network_no_reset(self, flax_custom_model: nnx.Module) -> None:
         """Tests that parameters are the same when reset_params is False."""
@@ -246,22 +229,14 @@ class TestParameters:
                 assert jnp.array_equal(orig, memb)
 
     def test_parameters_custom_network_with_reset(self, flax_custom_model: nnx.Module) -> None:
-        """Tests that parameters are the the same reseeded when reset_params is True."""
+        """Tests that parameters are the the same."""
         num_members = 3
-        model = ensemble(flax_custom_model, num_members=num_members, reset_params=True)
-
-        dummy = jnp.ones((1, 10))
-
+        model1 = ensemble(flax_custom_model, num_members=num_members, reset_params=True)
+        model2 = ensemble(flax_custom_model, num_members=num_members, reset_params=True)
         for i in range(num_members - 1):
-            nnx.reseed(flax_custom_model, policy="match_shape", rng=jax.random.PRNGKey(i))
-            reseeded_flax_custom_model = flax_custom_model(dummy)
-            reseed_model = model[i](dummy)
-
-            _, reseed_params = nnx.split(reseeded_flax_custom_model)
-            _, member_params = nnx.split(reseed_model)
             for reseed, memb in zip(
-                jax.tree_util.tree_leaves(reseed_params),
-                jax.tree_util.tree_leaves(member_params),
+                jax.tree_util.tree_leaves(model1[i]),
+                jax.tree_util.tree_leaves(model2[i]),
                 strict=False,
             ):
                 assert jnp.array_equal(reseed, memb)
