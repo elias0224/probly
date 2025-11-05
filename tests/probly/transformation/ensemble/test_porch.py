@@ -60,7 +60,7 @@ def test_reset_copys() -> None:
     base = DummyModel()
     n_members = 3
 
-    genmod = generate_torch_ensemble(base, n_members)
+    genmod = generate_torch_ensemble(base, num_members)
 
     for members in genmod:
         assert isinstance(members, nn.Module)
