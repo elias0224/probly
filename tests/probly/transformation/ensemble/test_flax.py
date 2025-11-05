@@ -135,7 +135,6 @@ class TestNetworkStructure:
         num_members = 5
         model = ensemble(flax_custom_model, num_members=num_members, reset_params=True)
 
-        # check if model type is correct
         for member in model:
             assert isinstance(member, type(flax_custom_model))
             assert not isinstance(member, nnx.Sequential)
@@ -174,6 +173,7 @@ class TestParameters:
         num_members = 3
         model1 = ensemble(flax_model_small_2d_2d, num_members=num_members, reset_params=True)
         model2 = ensemble(flax_model_small_2d_2d, num_members=num_members, reset_params=True)
+
         for i in range(num_members - 1):
             for reseed, memb in zip(
                 jax.tree_util.tree_leaves(model1[i]),
