@@ -21,8 +21,8 @@ def test_linear_network_with_first_linear(torch_model_small_2d_2d: nn.Sequential
 
     # check that the model is not modified except for the dropout layer
     assert model is not None
-    assert (count_linear_original * n_members) == count_linear_modified
-    assert (count_sequential_original * n_members) == count_sequential_modified
+    assert (count_linear_original * num_members) == count_linear_modified
+    assert (count_sequential_original * num_members) == count_sequential_modified
 
 
 def test_convolutional_network(torch_conv_linear_model: nn.Sequential) -> None:
@@ -39,9 +39,9 @@ def test_convolutional_network(torch_conv_linear_model: nn.Sequential) -> None:
 
     # check that the model is not modified except for the dropout layer
     assert model is not None
-    assert (count_linear_original * n_members) == count_linear_modified
-    assert (count_sequential_original * n_members) == count_sequential_modified
-    assert (count_conv_original * n_members) == count_conv_modified
+    assert (count_linear_original * num_members) == count_linear_modified
+    assert (count_sequential_original * num_members) == count_sequential_modified
+    assert (count_conv_original * num_members) == count_conv_modified
 
 
 class DummyModel(nn.Module):
