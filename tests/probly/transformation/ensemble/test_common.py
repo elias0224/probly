@@ -1,0 +1,34 @@
+"""Test for ensemble models."""
+
+from __future__ import annotations
+
+import pytest
+
+from probly.predictor import Predictor
+from probly.transformation.ensemble.common import ensemble_generator
+
+
+class InvalidPredictor(Predictor):
+    def __call__(self, x: int) -> int:
+        return x
+
+
+class ValidPredictor(Predictor):
+    pass
+
+
+def test_invalid_type() -> None:
+    """Test that an invalid type raises NotImplementedError."""
+    num_members = 3
+    base = InvalidPredictor()
+
+    with pytest.raises(NotImplementedError):
+        ensemble_generator(base, num_members=num_members)
+
+
+def test_invalid_members() -> None:
+    """Test n_members is a valid type."""
+    num_members = 3.5
+
+    with pytest.raises(AssertionError):
+        assert isinstance(int, type(num_members))
