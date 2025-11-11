@@ -12,7 +12,6 @@ def _unpack(out):
 
 @pytest.mark.parametrize("batch, in_dim, out_dim", [(1, 3, 1), (5, 4, 2)])
 def test_forward_shapes(batch, in_dim, out_dim):
-    pytest.skip("skip")
 
     key = jax.random.PRNGKey(0)
     x = jax.random.normal(key, (batch, in_dim))
