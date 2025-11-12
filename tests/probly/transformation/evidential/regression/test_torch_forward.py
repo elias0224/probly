@@ -1,13 +1,26 @@
 from __future__ import annotations
 
 import pytest
-import probly.transformation.evidential.regression as er
-torch = pytest.importorskip("torch")
-from torch import nn  
+from typing import Any, Callable, NoReturn
+
+# 可选依赖：torch 不在，就跳过整个文件（合规又不触发 E402）
+try:
+    import torch
+    from torch import nn
+except Exception:
+    pytest.skip("torch not available", allow_module_level=True)
+
+# 顶层导入待测模块，别在函数里 import
+from probly.transformation.evidential import regression as er
 
 
-def _get_evidential_transform():
-    
+def _die(msg: str) -> NoReturn:
+    """统一跳过，并避免 mypy 报 Missing return。"""
+    pytest.skip(msg)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def _get_evidential_transform() -> Callable[..., Any]:
     for name in (
         "evidential_regression",
         "regression",
@@ -19,23 +32,23 @@ def _get_evidential_transform():
         fn = getattr(er, name, None)
         if callable(fn):
             return fn
-    pytest.skip("No evidential regression transform found in probly.transformation.evidential.regression")
+    _die("No evidential regression transform found in probly.transformation.evidential.regression")
 
 
 def _first_linear_in_features(model: nn.Module) -> int:
     for m in model.modules():
         if isinstance(m, nn.Linear):
             return int(m.in_features)
-    pytest.skip("Fixture model has no nn.Linear; cannot infer input feature size")
+    _die("Fixture model has no nn.Linear; cannot infer input feature size")
 
 
 def _last_linear_out_features(model: nn.Module) -> int:
-    last = None
+    last: nn.Linear | None = None
     for m in model.modules():
         if isinstance(m, nn.Linear):
             last = m
     if last is None:
-        pytest.skip("Model has no nn.Linear; cannot infer output feature size")
+        _die("Model has no nn.Linear; cannot infer output feature size")
     return int(last.out_features)
 
 
@@ -45,7 +58,7 @@ def _first_conv_spec(model: nn.Module) -> tuple[int, int, int]:
             k = m.kernel_size
             kH, kW = (k, k) if isinstance(k, int) else k
             return int(m.in_channels), int(kH), int(kW)
-    pytest.skip("Fixture model has no nn.Conv2d; conv-forward test not applicable")
+    _die("Fixture model has no nn.Conv2d; conv-forward test not applicable")
 
 
 def _try_unpack(y):
@@ -58,6 +71,7 @@ def _try_unpack(y):
             out = _try_unpack(v)
             if out is not None:
                 return out
+
     if all(hasattr(y, k) for k in target):
         return y.mu, y.v, y.alpha, y.beta
 
@@ -76,11 +90,12 @@ def _try_unpack(y):
             return torch.split(y, split, dim=-1)
 
     return None
-    
+
+
 def _unpack_four(y):
     out = _try_unpack(y)
     if out is None:
-        pytest.skip("Cannot interpret model output as evidential {mu,v,alpha,beta}")
+        _die("Cannot interpret model output as evidential {mu,v,alpha,beta}")
     return out
 
 
@@ -107,23 +122,18 @@ class TestTorchForward:
             assert torch.is_tensor(t), "Each output head must be a tensor"
             assert t.shape[-1] == out_dim, f"Expected last dim {out_dim}, got {t.shape[-1]}"
             assert t.shape[0] == B, f"Expected batch {B}, got {t.shape[0]}"
-            
+
         for name, t in zip(("mu", "v", "alpha", "beta"), (mu, v, alpha, beta)):
             assert torch.isfinite(t).all(), f"{name} contains non-finite values"
 
         for name, t in zip(("v", "alpha", "beta"), (v, alpha, beta)):
-            if torch.is_floating_point(t):
-                assert (t > 0).all(), f"{name} must be positive"
-            else:
-                pytest.fail(f"{name} has non-floating dtype: {t.dtype}")
+            assert torch.is_floating_point(t), f"{name} has non-floating dtype: {t.dtype}"
+            assert (t > 0).all(), f"{name} must be positive"
 
     def test_forward_conv_model(self, torch_conv_linear_model: nn.Sequential) -> None:
         evidential = _get_evidential_transform()
         base = torch_conv_linear_model
 
-        C, kH, kW = _first_conv_spec(base)
-        out_dim = _last_linear_out_features(base)
-
-        model = evidential(base)
-
+        # smoke test：能包装成功即可，避免未使用变量
+        evidential(base)
 
