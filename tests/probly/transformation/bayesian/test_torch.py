@@ -24,13 +24,6 @@ class TestNetworkArchitectures:
 
         This function verifies that:
         - A standard linear layer is replaced with a bayesian linear layer.
-
-        Parameters:
-            torch_model_small_2d_2d: The torch model to be tested, specified as a sequential model.
-
-        Raises:
-            AssertionError: If the modified model deviates in structure other than
-            the replacement of bayesian layers or does not meet the expected constraints.
         """
         model = bayesian(torch_model_small_2d_2d)
 
@@ -61,13 +54,6 @@ class TestNetworkArchitectures:
         This function evaluates whether the given convolutional neural network model
         has been correctly modified to include bayesian layers without altering the
         number of other components such as linear, sequential, or convolutional layers.
-
-        Parameters:
-            torch_conv_linear_model: The original convolutional neural network model to be tested.
-
-        Raises:
-            AssertionError: If the modified model deviates in structure other than
-            the addition of bayesian layers or does not meet the expected constraints.
         """
         model = bayesian(torch_conv_linear_model)
 
@@ -109,37 +95,3 @@ class TestNetworkArchitectures:
         # check if model type is correct
         assert isinstance(model, type(torch_custom_model))
         assert not isinstance(model, nn.Sequential)
-
-    @pytest.mark.skip(reason="Not yet implemented in probly")
-    def test_bayesian_model(self, torch_bayesian_model: nn.Module) -> None:
-        """Tests the bayesian model modification if bayesian already exists."""
-        model = bayesian(torch_bayesian_model)
-
-        # count number of nn.Linear layers in original model
-        count_linear_original = count_layers(torch_bayesian_model, nn.Linear)
-        # count number of BayesianLinear layers in original model
-        count_bayesian_linear_original = count_layers(torch_bayesian_model, BayesLinear)
-        # count number of BayesianLinear layers in modified model
-        count_bayesian__linear_modified = count_layers(model, BayesLinear)
-
-        # count number of nn.Conv2d layers in original model
-        count_conv_original = count_layers(torch_bayesian_model, nn.Conv2d)
-        # count number of BayesianConv2d layers in original model
-        count_bayesian_conv_original = count_layers(torch_bayesian_model, BayesConv2d)
-        # count number of BayesianConv2d layers in modified model
-        count_bayesian_conv_modified = count_layers(model, BayesConv2d)
-
-        # check that no nn.Linear and nn.Conv2d layers are present and bayesian layers are unchanged
-        assert count_bayesian__linear_modified == count_bayesian_linear_original
-        assert count_linear_original == 0
-        assert count_bayesian_conv_modified == count_bayesian_conv_original
-        assert count_conv_original == 0
-
-        # check values in bayesian layers
-        for m in model.modules():
-            if isinstance(m, BayesLinear):
-                msg = "Possible value checks for BayesianLinear"
-                raise NotImplementedError(msg)
-            if isinstance(m, BayesConv2d):
-                msg = "Possible value checks for BayesianConv2d"
-                raise NotImplementedError(msg)
