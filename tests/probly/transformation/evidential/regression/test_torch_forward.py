@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import pytest
-
+import probly.transformation.evidential.regression as er
 torch = pytest.importorskip("torch")
 from torch import nn  
 
 
 def _get_evidential_transform():
-    import probly.transformation.evidential.regression as er
+    
     for name in (
         "evidential_regression",
         "regression",
