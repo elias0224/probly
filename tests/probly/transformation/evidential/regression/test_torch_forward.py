@@ -3,14 +3,14 @@ from __future__ import annotations
 import pytest
 from typing import Any, Callable, NoReturn
 
-# 可选依赖：torch 不在，就跳过整个文件（合规又不触发 E402）
+# 可选依赖：torch 不在，就跳过整个文件
 try:
     import torch
     from torch import nn
 except Exception:
     pytest.skip("torch not available", allow_module_level=True)
 
-# 顶层导入待测模块，别在函数里 import
+# 顶层导入待测模块
 from probly.transformation.evidential import regression as er
 
 
@@ -134,6 +134,6 @@ class TestTorchForward:
         evidential = _get_evidential_transform()
         base = torch_conv_linear_model
 
-        # smoke test：能包装成功即可，避免未使用变量
+        # 只做 smoke test：能包一层就算过
         evidential(base)
 
