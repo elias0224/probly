@@ -3,19 +3,16 @@ from __future__ import annotations
 import pytest
 from typing import Any, Callable, NoReturn
 
-# 可选依赖：torch 不在，就跳过整个文件
 try:
     import torch
     from torch import nn
 except Exception:
     pytest.skip("torch not available", allow_module_level=True)
-
-# 顶层导入待测模块
+    
 from probly.transformation.evidential import regression as er
 
 
 def _die(msg: str) -> NoReturn:
-    """统一跳过，并避免 mypy 报 Missing return。"""
     pytest.skip(msg)
     raise AssertionError("unreachable")  # pragma: no cover
 
@@ -133,7 +130,5 @@ class TestTorchForward:
     def test_forward_conv_model(self, torch_conv_linear_model: nn.Sequential) -> None:
         evidential = _get_evidential_transform()
         base = torch_conv_linear_model
-
-        # 只做 smoke test：能包一层就算过
         evidential(base)
 
