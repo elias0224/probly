@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 from typing import NoReturn, Any, Callable
 
-# 依赖可选
 try:
     import torch
     from torch import nn
