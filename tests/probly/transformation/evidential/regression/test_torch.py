@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 import pytest
+from typing import NoReturn, Any, Callable
+
+# 依赖可选
+try:
+    import torch
+    from torch import nn
+except Exception:
+    pytest.skip("torch not available", allow_module_level=True)
+
 from tests.probly.torch_utils import count_layers
-
-torch = pytest.importorskip("torch")
-from torch import nn  # noqa: E402
+from probly.transformation.evidential import regression as er
 
 
-def _get_evidential_transform():
-    import probly.transformation.evidential.regression as er
+def _die(msg: str) -> NoReturn:
+    pytest.skip(msg)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def _get_evidential_transform() -> Callable[..., Any]:
     for name in (
         "evidential_regression",
         "regression",
@@ -20,29 +31,31 @@ def _get_evidential_transform():
         fn = getattr(er, name, None)
         if callable(fn):
             return fn
-    pytest.skip("No evidential regression transform found in probly.transformation.evidential.regression")
+    _die("No evidential regression transform found in probly.transformation.evidential.regression")
 
 
 def _last_linear_and_out_features(model: nn.Module) -> tuple[nn.Linear, int]:
-    last = None
+    last: nn.Linear | None = None
     for m in model.modules():
         if isinstance(m, nn.Linear):
             last = m
     if last is None:
-        pytest.skip("Model has no nn.Linear layer to transform")
+        _die("Model has no nn.Linear layer to transform")
     return last, int(last.out_features)
 
 
 def _last_module(model: nn.Module) -> nn.Module:
-    last = None
+    last: nn.Module | None = None
     for m in model.modules():
         last = m
+    assert last is not None  # for mypy
     return last
 
 
 class TestNetworkArchitectures:
-
-    def test_linear_head_kept_or_replaced_once_and_structure_ok(self, torch_model_small_2d_2d: nn.Sequential) -> None:
+    def test_linear_head_kept_or_replaced_once_and_structure_ok(
+        self, torch_model_small_2d_2d: nn.Sequential
+    ) -> None:
         evidential = _get_evidential_transform()
 
         count_linear_orig = count_layers(torch_model_small_2d_2d, nn.Linear)
@@ -71,7 +84,9 @@ class TestNetworkArchitectures:
 
         assert out_feat_mod == out_feat_orig
 
-    def test_conv_model_kept_or_replaced_once_and_structure_ok(self, torch_conv_linear_model: nn.Sequential) -> None:
+    def test_conv_model_kept_or_replaced_once_and_structure_ok(
+        self, torch_conv_linear_model: nn.Sequential
+    ) -> None:
         evidential = _get_evidential_transform()
 
         count_linear_orig = count_layers(torch_conv_linear_model, nn.Linear)
@@ -98,5 +113,3 @@ class TestNetworkArchitectures:
             assert not isinstance(tail, nn.Linear)
 
         assert out_feat_mod == out_feat_orig
-
-
