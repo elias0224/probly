@@ -3,16 +3,29 @@ from __future__ import annotations
 import pytest
 from typing import Any, Callable, NoReturn
 
+<<<<<<< HEAD
+=======
+# 可选依赖：torch 不在，就跳过整个文件
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
 try:
     import torch
     from torch import nn
 except Exception:
     pytest.skip("torch not available", allow_module_level=True)
+<<<<<<< HEAD
     
+=======
+
+# 顶层导入待测模块
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
 from probly.transformation.evidential import regression as er
 
 
 def _die(msg: str) -> NoReturn:
+<<<<<<< HEAD
+=======
+    """统一跳过，并避免 mypy 报 Missing return。"""
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
     pytest.skip(msg)
     raise AssertionError("unreachable")  # pragma: no cover
 
@@ -29,7 +42,13 @@ def _get_evidential_transform() -> Callable[..., Any]:
         fn = getattr(er, name, None)
         if callable(fn):
             return fn
+<<<<<<< HEAD
     _die("No evidential regression transform found in probly.transformation.evidential.regression")
+=======
+    _die(
+        "No evidential regression transform found in probly.transformation.evidential.regression"
+    )
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
 
 
 def _first_linear_in_features(model: nn.Module) -> int:
@@ -97,7 +116,9 @@ def _unpack_four(y):
 
 
 class TestTorchForward:
-    def test_forward_and_parameter_shapes(self, torch_model_small_2d_2d: nn.Sequential) -> None:
+    def test_forward_and_parameter_shapes(
+        self, torch_model_small_2d_2d: nn.Sequential
+    ) -> None:
         evidential = _get_evidential_transform()
         base = torch_model_small_2d_2d
 
@@ -117,18 +138,32 @@ class TestTorchForward:
 
         for t in (mu, v, alpha, beta):
             assert torch.is_tensor(t), "Each output head must be a tensor"
-            assert t.shape[-1] == out_dim, f"Expected last dim {out_dim}, got {t.shape[-1]}"
+            assert t.shape[-1] == out_dim, (
+                f"Expected last dim {out_dim}, got {t.shape[-1]}"
+            )
             assert t.shape[0] == B, f"Expected batch {B}, got {t.shape[0]}"
 
         for name, t in zip(("mu", "v", "alpha", "beta"), (mu, v, alpha, beta)):
             assert torch.isfinite(t).all(), f"{name} contains non-finite values"
 
         for name, t in zip(("v", "alpha", "beta"), (v, alpha, beta)):
+<<<<<<< HEAD
             assert torch.is_floating_point(t), f"{name} has non-floating dtype: {t.dtype}"
+=======
+            assert torch.is_floating_point(t), (
+                f"{name} has non-floating dtype: {t.dtype}"
+            )
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
             assert (t > 0).all(), f"{name} must be positive"
 
     def test_forward_conv_model(self, torch_conv_linear_model: nn.Sequential) -> None:
         evidential = _get_evidential_transform()
         base = torch_conv_linear_model
+<<<<<<< HEAD
         evidential(base)
 
+=======
+
+        # 只做 smoke test：能包一层就算过
+        evidential(base)
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)

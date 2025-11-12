@@ -3,8 +3,13 @@ from __future__ import annotations
 import pytest
 from typing import NoReturn, Any, Callable
 
+<<<<<<< HEAD
 try:
     import torch
+=======
+# 依赖可选
+try:
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
     from torch import nn
 except Exception:
     pytest.skip("torch not available", allow_module_level=True)
@@ -30,7 +35,13 @@ def _get_evidential_transform() -> Callable[..., Any]:
         fn = getattr(er, name, None)
         if callable(fn):
             return fn
+<<<<<<< HEAD
     _die("No evidential regression transform found in probly.transformation.evidential.regression")
+=======
+    _die(
+        "No evidential regression transform found in probly.transformation.evidential.regression"
+    )
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
 
 
 def _last_linear_and_out_features(model: nn.Module) -> tuple[nn.Linear, int]:

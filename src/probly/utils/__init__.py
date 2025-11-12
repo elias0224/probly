@@ -1,6 +1,10 @@
 """Utils module for probly library."""
 
-from .probabilities import differential_entropy_gaussian, intersection_probability, kl_divergence_gaussian
+from .probabilities import (
+    differential_entropy_gaussian,
+    intersection_probability,
+    kl_divergence_gaussian,
+)
 from .sets import capacity, moebius, powerset
 
 __all__ = [

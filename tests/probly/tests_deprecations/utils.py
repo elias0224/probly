@@ -52,8 +52,12 @@ def register_deprecated(
         A decorator that registers the deprecated feature.
     """
 
-    def _decorator(func: Callable[[pytest.FixtureRequest], None]) -> Callable[[pytest.FixtureRequest], None]:
-        DEPRECATED_FEATURES.append(DeprecatedFeature(name, deprecated_in, removed_in, func))
+    def _decorator(
+        func: Callable[[pytest.FixtureRequest], None],
+    ) -> Callable[[pytest.FixtureRequest], None]:
+        DEPRECATED_FEATURES.append(
+            DeprecatedFeature(name, deprecated_in, removed_in, func)
+        )
         return func
 
     return _decorator

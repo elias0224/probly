@@ -5,7 +5,11 @@ from __future__ import annotations
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from probly.utils.torch import temperature_softmax, torch_collect_outputs, torch_reset_all_parameters
+from probly.utils.torch import (
+    temperature_softmax,
+    torch_collect_outputs,
+    torch_reset_all_parameters,
+)
 
 
 def test_torch_reset_all_parameters(torch_conv_linear_model: torch.nn.Module) -> None:
@@ -27,7 +31,9 @@ def test_torch_collect_outputs(torch_conv_linear_model: torch.nn.Module) -> None
             ),
         ),
     )
-    outputs, targets = torch_collect_outputs(torch_conv_linear_model, loader, torch.device("cpu"))
+    outputs, targets = torch_collect_outputs(
+        torch_conv_linear_model, loader, torch.device("cpu")
+    )
     assert outputs.shape == (2, 2)
     assert targets.shape == (2,)
 
@@ -35,4 +41,6 @@ def test_torch_collect_outputs(torch_conv_linear_model: torch.nn.Module) -> None
 def test_temperature_softmax() -> None:
     x = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
     assert torch.equal(temperature_softmax(x, 2.0), torch.softmax(x / 2.0, dim=1))
-    assert torch.equal(temperature_softmax(x, torch.tensor(1.0)), torch.softmax(x, dim=1))
+    assert torch.equal(
+        temperature_softmax(x, torch.tensor(1.0)), torch.softmax(x, dim=1)
+    )

@@ -9,14 +9,21 @@ from probly.lazy_types import FLAX_MODULE, TORCH_MODULE
 from probly.predictor import Predictor, predict
 from probly.representation.representer import Representer
 from probly.traverse_nn import nn_compose
-from pytraverse import CLONE, GlobalVariable, lazydispatch_traverser, traverse_with_state
+from pytraverse import (
+    CLONE,
+    GlobalVariable,
+    lazydispatch_traverser,
+    traverse_with_state,
+)
 
 from .sample import Sample, create_sample
 
 type SamplingStrategy = Literal["sequential"]
 
 
-sampling_preparation_traverser = lazydispatch_traverser[object](name="sampling_preparation_traverser")
+sampling_preparation_traverser = lazydispatch_traverser[object](
+    name="sampling_preparation_traverser"
+)
 
 CLEANUP_FUNCS = GlobalVariable[set[Callable[[], Any]]](name="CLEANUP_FUNCS")
 
@@ -60,7 +67,10 @@ def sampler_factory[In, KwIn, Out](
         sampling_predictor, cleanup = get_sampling_predictor(predictor)
         try:
             if strategy == "sequential":
-                return [predict(sampling_predictor, *args, **kwargs) for _ in range(num_samples)]
+                return [
+                    predict(sampling_predictor, *args, **kwargs)
+                    for _ in range(num_samples)
+                ]
         finally:
             cleanup()
 

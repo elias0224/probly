@@ -8,7 +8,9 @@ import numpy as np
 import sklearn.metrics as sm
 
 
-def selective_prediction(criterion: np.ndarray, losses: np.ndarray, n_bins: int = 50) -> tuple[float, np.ndarray]:
+def selective_prediction(
+    criterion: np.ndarray, losses: np.ndarray, n_bins: int = 50
+) -> tuple[float, np.ndarray]:
     """Selective prediction downstream task for evaluation.
 
     Perform selective prediction based on criterion and losses.
@@ -26,7 +28,9 @@ def selective_prediction(criterion: np.ndarray, losses: np.ndarray, n_bins: int 
 
     """
     if n_bins > len(losses):
-        msg = "The number of bins can not be larger than the number of elements criterion"
+        msg = (
+            "The number of bins can not be larger than the number of elements criterion"
+        )
         raise ValueError(msg)
     sort_idxs = np.argsort(criterion)[::-1]
     losses_sorted = losses[sort_idxs]
@@ -40,7 +44,9 @@ def selective_prediction(criterion: np.ndarray, losses: np.ndarray, n_bins: int 
     return auroc, bin_losses
 
 
-def out_of_distribution_detection(in_distribution: np.ndarray, out_distribution: np.ndarray) -> float:
+def out_of_distribution_detection(
+    in_distribution: np.ndarray, out_distribution: np.ndarray
+) -> float:
     """Perform out-of-distribution detection using prediction functionals from id and ood data.
 
     This can be epistemic uncertainty, as is common, but also e.g. softmax confidence.
@@ -53,6 +59,8 @@ def out_of_distribution_detection(in_distribution: np.ndarray, out_distribution:
 
     """
     preds = np.concatenate((in_distribution, out_distribution))
-    labels = np.concatenate((np.zeros(len(in_distribution)), np.ones(len(out_distribution))))
+    labels = np.concatenate(
+        (np.zeros(len(in_distribution)), np.ones(len(out_distribution)))
+    )
     auroc = sm.roc_auc_score(labels, preds)
     return float(auroc)

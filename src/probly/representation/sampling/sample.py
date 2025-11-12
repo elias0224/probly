@@ -42,7 +42,9 @@ class ListSample[T](list[T], Sample[T]):
         return type(self)(super().__add__(other))  # type: ignore[operator]
 
 
-create_sample = lazydispatch[type[Sample], Sample](ListSample, dispatch_on=lambda s: s[0])
+create_sample = lazydispatch[type[Sample], Sample](
+    ListSample, dispatch_on=lambda s: s[0]
+)
 
 
 @create_sample.register(np.number | np.ndarray | float | int)

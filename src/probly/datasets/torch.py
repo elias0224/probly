@@ -26,7 +26,13 @@ class CIFAR10H(torchvision.datasets.CIFAR10):
         targets: torch.Tensor size (n_instances, n_classes), first-order distribution
     """
 
-    def __init__(self, root: str, transform: Callable[..., Any] | None = None, *, download: bool = False) -> None:
+    def __init__(
+        self,
+        root: str,
+        transform: Callable[..., Any] | None = None,
+        *,
+        download: bool = False,
+    ) -> None:
         """Initialize an instance of the CIFAR10H class.
 
         Args:
@@ -35,7 +41,9 @@ class CIFAR10H(torchvision.datasets.CIFAR10):
             download: bool, whether to download the CIFAR10 dataset or not
         """
         super().__init__(root, train=False, transform=transform, download=download)
-        first_order_path = Path(self.root) / "cifar-10h-master" / "data" / "cifar10h-counts.npy"
+        first_order_path = (
+            Path(self.root) / "cifar-10h-master" / "data" / "cifar10h-counts.npy"
+        )
         self.counts = np.load(first_order_path)
         self.counts = torch.tensor(self.counts, dtype=torch.float32)
         self.targets = self.counts / self.counts.sum(dim=1, keepdim=True)
@@ -53,7 +61,9 @@ class ImageNetReaL(torchvision.datasets.ImageNet):
         dists: list, list of distributions over target classes.
     """
 
-    def __init__(self, root: str | Path, transform: Callable[..., Any] | None = None) -> None:
+    def __init__(
+        self, root: str | Path, transform: Callable[..., Any] | None = None
+    ) -> None:
         """Initialize an instance of the ImageNetReaL class.
 
         Args:
@@ -62,9 +72,14 @@ class ImageNetReaL(torchvision.datasets.ImageNet):
         """
         super().__init__(root=root, split="val", transform=transform)
         root = Path(root).expanduser()
-        with (Path(root).expanduser() / "reassessed-imagenet-master/real.json").open() as f:
+        with (
+            Path(root).expanduser() / "reassessed-imagenet-master/real.json"
+        ).open() as f:
             real = json.load(f)
-        real_labels = {f"ILSVRC2012_val_{(i + 1):08d}.JPEG": labels for i, labels in enumerate(real)}
+        real_labels = {
+            f"ILSVRC2012_val_{(i + 1):08d}.JPEG": labels
+            for i, labels in enumerate(real)
+        }
         self.dists = []
         for img, _ in self.samples:
             labels = real_labels[img.split("/")[-1]]
@@ -143,9 +158,13 @@ class DCICDataset(torch.utils.data.Dataset):
                 self.image_labels[img_path].append(label)
 
         self.image_paths = list(self.image_labels.keys())
-        unique_labels = {label for labels in self.image_labels.values() for label in labels}
+        unique_labels = {
+            label for labels in self.image_labels.values() for label in labels
+        }
         self.label_mappings = {label: idx for idx, label in enumerate(unique_labels)}
-        self.num_classes = len({label for labels in self.image_labels.values() for label in labels})
+        self.num_classes = len(
+            {label for labels in self.image_labels.values() for label in labels}
+        )
         self.data = []
         self.targets = []
         for img_path in self.image_paths:
@@ -155,7 +174,9 @@ class DCICDataset(torch.utils.data.Dataset):
             self.data.append(image)
             labels = self.image_labels[img_path]
             label_indices = [self.label_mappings[label] for label in labels]
-            dist = torch.bincount(torch.tensor(label_indices), minlength=self.num_classes).float()
+            dist = torch.bincount(
+                torch.tensor(label_indices), minlength=self.num_classes
+            ).float()
             dist /= dist.sum()
             if first_order:
                 self.targets.append(dist)
@@ -277,7 +298,9 @@ class Treeversity1(DCICDataset):
             transform: optional transform to apply to the data
             first_order: bool, whether to use first order data or class labels
         """
-        super().__init__(Path(root) / "Treeversity#1", transform, first_order=first_order)
+        super().__init__(
+            Path(root) / "Treeversity#1", transform, first_order=first_order
+        )
 
 
 class Treeversity6(DCICDataset):
@@ -300,4 +323,6 @@ class Treeversity6(DCICDataset):
             transform: optional transform to apply to the data
             first_order: bool, whether to use first order data or class labels
         """
-        super().__init__(Path(root) / "Treeversity#6", transform, first_order=first_order)
+        super().__init__(
+            Path(root) / "Treeversity#6", transform, first_order=first_order
+        )

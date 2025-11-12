@@ -17,6 +17,8 @@ class Predictor[In, KwIn, Out](Protocol):
 
 
 @lazydispatch
-def predict[In, KwIn, Out](predictor: Predictor[In, KwIn, Out], *args: In, **kwargs: Unpack[KwIn]) -> Out:
+def predict[In, KwIn, Out](
+    predictor: Predictor[In, KwIn, Out], *args: In, **kwargs: Unpack[KwIn]
+) -> Out:
     """Generic predict function."""
     return predictor(*args, **kwargs)

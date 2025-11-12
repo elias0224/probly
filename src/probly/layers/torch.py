@@ -57,10 +57,14 @@ class BayesLinear(nn.Module):
 
         # posterior weights
         if not use_base_weights:
-            self.weight_mu = nn.Parameter(torch.empty((self.out_features, self.in_features)))
+            self.weight_mu = nn.Parameter(
+                torch.empty((self.out_features, self.in_features))
+            )
         else:
             self.weight_mu = nn.Parameter(cast("torch.Tensor", base_layer.weight.data))
-        self.weight_rho = nn.Parameter(torch.full((self.out_features, self.in_features), rho))
+        self.weight_rho = nn.Parameter(
+            torch.full((self.out_features, self.in_features), rho)
+        )
 
         # prior weights
         if not use_base_weights:
@@ -221,12 +225,21 @@ class BayesConv2d(nn.Module):
         # posterior weights
         if not use_base_weights:
             self.weight_mu = nn.Parameter(
-                torch.empty((self.out_channels, self.in_channels // self.groups, *self.kernel_size)),
+                torch.empty(
+                    (
+                        self.out_channels,
+                        self.in_channels // self.groups,
+                        *self.kernel_size,
+                    )
+                ),
             )
         else:
             self.weight_mu = nn.Parameter(cast("torch.Tensor", base_layer.weight.data))
         self.weight_rho = nn.Parameter(
-            torch.full((self.out_channels, self.in_channels // self.groups, *self.kernel_size), rho),
+            torch.full(
+                (self.out_channels, self.in_channels // self.groups, *self.kernel_size),
+                rho,
+            ),
         )
 
         # prior weights
@@ -234,7 +247,11 @@ class BayesConv2d(nn.Module):
             self.register_buffer(
                 "weight_prior_mu",
                 torch.full(
-                    (self.out_channels, self.in_channels // self.groups, *self.kernel_size),
+                    (
+                        self.out_channels,
+                        self.in_channels // self.groups,
+                        *self.kernel_size,
+                    ),
                     prior_mean,
                 ),
             )
@@ -246,7 +263,10 @@ class BayesConv2d(nn.Module):
 
         self.register_buffer(
             "weight_prior_sigma",
-            torch.full((self.out_channels, self.in_channels // self.groups, *self.kernel_size), prior_std),
+            torch.full(
+                (self.out_channels, self.in_channels // self.groups, *self.kernel_size),
+                prior_std,
+            ),
         )
 
         if self.bias:
@@ -365,7 +385,11 @@ def _kl_divergence_gaussian(
     Returns:
         kl_div: float or numpy.ndarray shape (n_instances,), KL-divergence between the two Gaussian distributions
     """
-    kl_div: torch.Tensor = 0.5 * torch.log(sigma22 / sigma21) + (sigma21 + (mu1 - mu2) ** 2) / (2 * sigma22) - 0.5
+    kl_div: torch.Tensor = (
+        0.5 * torch.log(sigma22 / sigma21)
+        + (sigma21 + (mu1 - mu2) ** 2) / (2 * sigma22)
+        - 0.5
+    )
     return kl_div
 
 
@@ -408,7 +432,11 @@ class DropConnectLinear(nn.Module):
         self.out_features = base_layer.out_features
         self.p = p
         self.weight = nn.Parameter(base_layer.weight.clone().detach())
-        self.bias = nn.Parameter(base_layer.bias.clone().detach()) if base_layer.bias is not None else None
+        self.bias = (
+            nn.Parameter(base_layer.bias.clone().detach())
+            if base_layer.bias is not None
+            else None
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the DropConnect layer.
@@ -451,7 +479,14 @@ class NormalInverseGammaLinear(nn.Module):
 
     """
 
-    def __init__(self, in_features: int, out_features: int, device: torch.device = None, *, bias: bool = True) -> None:
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        device: torch.device = None,
+        *,
+        bias: bool = True,
+    ) -> None:
         """Initialize an instance of the NormalInverseGammaLinear layer.
 
         Args:
@@ -461,10 +496,16 @@ class NormalInverseGammaLinear(nn.Module):
             bias: Whether to include bias in the layer. Defaults to True
         """
         super().__init__()
-        self.gamma = nn.Parameter(torch.empty((out_features, in_features), device=device))
+        self.gamma = nn.Parameter(
+            torch.empty((out_features, in_features), device=device)
+        )
         self.nu = nn.Parameter(torch.empty((out_features, in_features), device=device))
-        self.alpha = nn.Parameter(torch.empty((out_features, in_features), device=device))
-        self.beta = nn.Parameter(torch.empty((out_features, in_features), device=device))
+        self.alpha = nn.Parameter(
+            torch.empty((out_features, in_features), device=device)
+        )
+        self.beta = nn.Parameter(
+            torch.empty((out_features, in_features), device=device)
+        )
         if bias:
             self.gamma_bias = nn.Parameter(torch.empty(out_features, device=device))
             self.nu_bias = nn.Parameter(torch.empty(out_features, device=device))

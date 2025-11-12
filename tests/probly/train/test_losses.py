@@ -19,7 +19,11 @@ from probly.train.losses import (
     FocalLoss,
     LabelRelaxationLoss,
 )
-from probly.transformation import bayesian, evidential_classification, evidential_regression
+from probly.transformation import (
+    bayesian,
+    evidential_classification,
+    evidential_regression,
+)
 
 
 @pytest.fixture

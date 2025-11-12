@@ -14,7 +14,9 @@ from flax import nnx  # noqa: E402
 class TestNetworkArchitectures:
     """Test class for different network architectures."""
 
-    def test_linear_network_with_first_linear(self, flax_model_small_2d_2d: nnx.Sequential) -> None:
+    def test_linear_network_with_first_linear(
+        self, flax_model_small_2d_2d: nnx.Sequential
+    ) -> None:
         """Tests if a model incorporates a dropout layer correctly when a linear layer succeeds it.
 
         This function verifies that:
@@ -56,7 +58,9 @@ class TestNetworkArchitectures:
         assert count_dropout_original == 0
         assert count_sequential_original == count_sequential_modified
 
-    def test_convolutional_network(self, flax_conv_linear_model: nnx.Sequential) -> None:
+    def test_convolutional_network(
+        self, flax_conv_linear_model: nnx.Sequential
+    ) -> None:
         """Tests the convolutional neural network modification with added dropout layers.
 
         This function evaluates whether the given convolutional neural network model
@@ -136,7 +140,9 @@ class TestNetworkArchitectures:
 class TestPValues:
     """Test class for p-value tests."""
 
-    def test_linear_network_p_value(self, flax_model_small_2d_2d: nnx.Sequential) -> None:
+    def test_linear_network_p_value(
+        self, flax_model_small_2d_2d: nnx.Sequential
+    ) -> None:
         """Tests the Dropout layer's p-value in a given neural network model.
 
         This function verifies that a Dropout layer inside the provided neural network

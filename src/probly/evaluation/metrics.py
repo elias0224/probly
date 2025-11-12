@@ -9,7 +9,9 @@ from tqdm import tqdm
 ROUND_DECIMALS = 3  # Number of decimals to round probabilities to when computing coverage, efficiency, etc.
 
 
-def expected_calibration_error(probs: np.ndarray, labels: np.ndarray, num_bins: int = 10) -> float:
+def expected_calibration_error(
+    probs: np.ndarray, labels: np.ndarray, num_bins: int = 10
+) -> float:
     """Compute the expected calibration error (ECE) of the predicted probabilities :cite:`guoOnCalibration2017`.
 
     Args:
@@ -182,7 +184,9 @@ def brier_score(probs: np.ndarray, targets: np.ndarray) -> float | np.ndarray:
     if targets is None:
         loss = 1 - 2 * probs + np.sum(probs**2, -1)[..., None]
     else:
-        loss = 1 - 2 * probs[np.arange(probs.shape[0]), targets] + np.sum(probs**2, axis=1)
+        loss = (
+            1 - 2 * probs[np.arange(probs.shape[0]), targets] + np.sum(probs**2, axis=1)
+        )
         loss = np.mean(loss)
     return loss
 
@@ -222,6 +226,8 @@ def spherical_score(probs: np.ndarray, targets: np.ndarray) -> float | np.ndarra
     if targets is None:
         loss = 1 - probs / np.sqrt(np.sum(probs**2, -1))[..., None]
     else:
-        loss = 1 - probs[np.arange(probs.shape[0]), targets] / np.sqrt(np.sum(probs**2, axis=1))
+        loss = 1 - probs[np.arange(probs.shape[0]), targets] / np.sqrt(
+            np.sum(probs**2, axis=1)
+        )
         loss = np.mean(loss)
     return loss

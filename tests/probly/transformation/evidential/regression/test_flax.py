@@ -1,12 +1,33 @@
 from __future__ import annotations
 
 import pytest
+<<<<<<< HEAD
 from typing import Tuple, Any, NoReturn
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 flax = pytest.importorskip("flax")
 from flax import nnx  # noqa: E402
+=======
+from typing import Any, NoReturn, Tuple
+
+# 可选依赖：顶层 try/except，避免 E402
+try:
+    import jax.numpy as jnp  # noqa: F401
+    from flax import nnx
+except Exception:
+    pytest.skip("jax/flax not available", allow_module_level=True)
+
+# 顶层其余导入，保持纯 import 区域
+from tests.probly.flax_utils import count_layers
+from probly.transformation.evidential import regression as er
+
+
+def _die(msg: str) -> NoReturn:
+    pytest.skip(msg)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
 
 from tests.probly.flax_utils import count_layers
 from probly.transformation.evidential import regression as er
@@ -29,7 +50,13 @@ def _get_evidential_transform():
         fn = getattr(er, name, None)
         if callable(fn):
             return fn
+<<<<<<< HEAD
     _die("No evidential regression transform found in probly.transformation.evidential.regression")
+=======
+    _die(
+        "No evidential regression transform found in probly.transformation.evidential.regression"
+    )
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
 
 
 def _iter_modules(m: nnx.Module):
@@ -49,19 +76,30 @@ def _maybe_array(x: Any):
 
 
 def _linear_in_out_by_params(layer: nnx.Linear) -> Tuple[int, int]:
+    # 先尝试 bias 推断 out_features
     for name in ("bias", "b"):
         if hasattr(layer, name):
             arr = _maybe_array(getattr(layer, name))
             if arr is not None and getattr(arr, "ndim", 0) == 1:
                 out_features = int(arr.shape[0])
+<<<<<<< HEAD
                 return -1, out_features 
 
+=======
+                return -1, out_features  # in_features 未知，用 -1 占位
+
+    # 再尝试 kernel/weight
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
     for name in ("kernel", "weight", "w"):
         if hasattr(layer, name):
             arr = _maybe_array(getattr(layer, name))
             if arr is not None and getattr(arr, "ndim", 0) == 2:
                 return int(arr.shape[0]), int(arr.shape[1])
 
+<<<<<<< HEAD
+=======
+    # 最后穷举属性里可能的数组
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
     for k in dir(layer):
         if k.startswith("_"):
             continue
@@ -94,7 +132,13 @@ def _last_linear_and_out_features(model: nnx.Module) -> Tuple[nnx.Linear, int]:
 
 
 class TestNetworkArchitectures:
+<<<<<<< HEAD
     def test_linear_head_kept_and_structure_unchanged(self, flax_model_small_2d_2d: nnx.Sequential) -> None:
+=======
+    def test_linear_head_kept_and_structure_unchanged(
+        self, flax_model_small_2d_2d: nnx.Sequential
+    ) -> None:
+>>>>>>> a468bb3 (chore(pre-commit): run mypy via config and disable filename passing)
         evidential = _get_evidential_transform()
 
         count_linear_orig = count_layers(flax_model_small_2d_2d, nnx.Linear)
@@ -116,7 +160,9 @@ class TestNetworkArchitectures:
         assert count_linear_mod == count_linear_orig
         assert out_feat_mod == out_feat_orig
 
-    def test_conv_model_kept_and_structure_unchanged(self, flax_conv_linear_model: nnx.Sequential) -> None:
+    def test_conv_model_kept_and_structure_unchanged(
+        self, flax_conv_linear_model: nnx.Sequential
+    ) -> None:
         evidential = _get_evidential_transform()
 
         count_linear_orig = count_layers(flax_conv_linear_model, nnx.Linear)

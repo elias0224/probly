@@ -342,7 +342,9 @@ class _AbstractSingledispatchTraverser[T: object, D](abc.ABC):
         return self._dispatch.register(traverser)
 
 
-class SingledispatchTraverser[T](_AbstractSingledispatchTraverser[T, type | types.UnionType]):
+class SingledispatchTraverser[T](
+    _AbstractSingledispatchTraverser[T, type | types.UnionType]
+):
     """A wrapper around functools.singledispatch to create an extensible traverser.
 
     This class provides a type-based dispatch mechanism for traversers, allowing
@@ -371,7 +373,9 @@ class SingledispatchTraverser[T](_AbstractSingledispatchTraverser[T, type | type
         return _is_valid_dispatch_type(cls)
 
 
-class LazydispatchTraverser[T](_AbstractSingledispatchTraverser[T, lazy_dispatch.LazyType]):
+class LazydispatchTraverser[T](
+    _AbstractSingledispatchTraverser[T, lazy_dispatch.LazyType]
+):
     """A wrapper around lazy_dispath.singledispatch to create an extensible traverser with lazy type matching.
 
     This class provides a type-based dispatch mechanism for traversers, allowing

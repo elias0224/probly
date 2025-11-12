@@ -45,7 +45,9 @@ def torch_reset_all_parameters(module: torch.nn.Module) -> None:
             child.reset_parameters()
 
 
-def temperature_softmax(logits: torch.Tensor, temperature: float | torch.Tensor) -> torch.Tensor:
+def temperature_softmax(
+    logits: torch.Tensor, temperature: float | torch.Tensor
+) -> torch.Tensor:
     """Compute the softmax of logits with temperature scaling applied.
 
     Computes the softmax based on the logits divided by the temperature. Assumes that the last dimension

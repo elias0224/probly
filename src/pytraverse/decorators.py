@@ -122,8 +122,12 @@ type LooseTraverserWithoutVarUpdates[T] = (
     | Traverser[T]
     | Callable[[], Any]
 )
-type LooseTraverserWithVarUpdates[T] = ObjTraverserWithVarUpdates[T] | ObjTraverseTraverserWithVarUpdates[T]
-type LooseTraverser[T] = LooseTraverserWithoutVarUpdates[T] | LooseTraverserWithVarUpdates[T]
+type LooseTraverserWithVarUpdates[T] = (
+    ObjTraverserWithVarUpdates[T] | ObjTraverseTraverserWithVarUpdates[T]
+)
+type LooseTraverser[T] = (
+    LooseTraverserWithoutVarUpdates[T] | LooseTraverserWithVarUpdates[T]
+)
 
 type StatePredicate[T] = Callable[[State[T]], bool] | Variable[bool]
 
@@ -217,7 +221,9 @@ def _detect_traverser_type[T](  # noqa: C901, PLR0912, PLR0915
     arg: str
 
     for i, arg in args:
-        if (state_name is None and mode == "state") or (arg == "state" and mode == "auto"):
+        if (state_name is None and mode == "state") or (
+            arg == "state" and mode == "auto"
+        ):
             state_name = arg
             state_pos = i
             continue
@@ -225,7 +231,9 @@ def _detect_traverser_type[T](  # noqa: C901, PLR0912, PLR0915
             traverse_name = arg
             traverse_pos = i
             continue
-        if (obj_name is None and mode in {"auto", "obj"}) or (arg == "obj" and mode == "auto"):
+        if (obj_name is None and mode in {"auto", "obj"}) or (
+            arg == "obj" and mode == "auto"
+        ):
             obj_name = arg
             obj_pos = i
 
@@ -236,7 +244,12 @@ def _detect_traverser_type[T](  # noqa: C901, PLR0912, PLR0915
             stacklevel=2,
         )
 
-    if obj_pos is None and state_pos is None and traverse_pos is None and len(args) >= 2:
+    if (
+        obj_pos is None
+        and state_pos is None
+        and traverse_pos is None
+        and len(args) >= 2
+    ):
         arg0, arg1 = args[:2]
         if mode == "obj_state":
             obj_pos, obj_name = arg0

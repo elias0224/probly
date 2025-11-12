@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import numpy as np
 
-from probly.utils.probabilities import differential_entropy_gaussian, intersection_probability, kl_divergence_gaussian
+from probly.utils.probabilities import (
+    differential_entropy_gaussian,
+    intersection_probability,
+    kl_divergence_gaussian,
+)
 
 
 def test_differential_entropy_gaussian() -> None:
     assert np.isclose(differential_entropy_gaussian(0.5), 1.54709559)
-    assert np.allclose(differential_entropy_gaussian(np.array([1, 2]), base=np.e), np.array([1.41893853, 1.76551212]))
+    assert np.allclose(
+        differential_entropy_gaussian(np.array([1, 2]), base=np.e),
+        np.array([1.41893853, 1.76551212]),
+    )
 
 
 def test_kl_divergence_gaussian() -> None:
@@ -19,7 +26,10 @@ def test_kl_divergence_gaussian() -> None:
     sigma22 = np.array([0.1, 0.1])
     assert np.isclose(kl_divergence_gaussian(1.0, 1.0, 1.0, 1.0), 0.0)
     assert np.isclose(kl_divergence_gaussian(1.0, 1.0, 1.0, 1.0, base=np.e), 0.0)
-    assert np.allclose(kl_divergence_gaussian(mu1, sigma21, mu2, sigma22, base=np.e), np.array([5.0, 5.0]))
+    assert np.allclose(
+        kl_divergence_gaussian(mu1, sigma21, mu2, sigma22, base=np.e),
+        np.array([5.0, 5.0]),
+    )
 
 
 def test_intersection_probability() -> None:

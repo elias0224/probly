@@ -18,5 +18,8 @@ def test_invalid_p_value(dummy_predictor: Predictor) -> None:
         ValueError: If the probability `p` is not between 0 and 1.
     """
     p = 2
-    with pytest.raises(ValueError, match=f"The probability p must be between 0 and 1, but got {p} instead."):
+    with pytest.raises(
+        ValueError,
+        match=f"The probability p must be between 0 and 1, but got {p} instead.",
+    ):
         dropout(dummy_predictor, p=p)

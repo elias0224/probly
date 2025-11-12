@@ -63,12 +63,16 @@ def mutual_information(probs: np.ndarray, base: float = 2) -> np.ndarray:
 
     """
     probs_mean = probs.mean(axis=1)
-    probs_mean = np.repeat(np.expand_dims(probs_mean, 1), repeats=probs.shape[1], axis=1)
+    probs_mean = np.repeat(
+        np.expand_dims(probs_mean, 1), repeats=probs.shape[1], axis=1
+    )
     mi = entropy(probs, probs_mean, axis=2, base=base).mean(axis=1)
     return mi
 
 
-def expected_loss(probs: np.ndarray, loss_fn: Callable[[np.ndarray, np.ndarray | None], np.ndarray]) -> np.ndarray:
+def expected_loss(
+    probs: np.ndarray, loss_fn: Callable[[np.ndarray, np.ndarray | None], np.ndarray]
+) -> np.ndarray:
     """Compute the expected loss of the second-order distribution.
 
     The computation is based on samples from a second-order distribution.
@@ -86,7 +90,9 @@ def expected_loss(probs: np.ndarray, loss_fn: Callable[[np.ndarray, np.ndarray |
     return el
 
 
-def expected_entropy(probs: np.ndarray, loss_fn: Callable[[np.ndarray, np.ndarray | None], np.ndarray]) -> np.ndarray:
+def expected_entropy(
+    probs: np.ndarray, loss_fn: Callable[[np.ndarray, np.ndarray | None], np.ndarray]
+) -> np.ndarray:
     """Compute the expected entropy of the second-order distribution.
 
     The computation is based on samples from a second-order distribution.
@@ -120,7 +126,9 @@ def expected_divergence(
 
     """
     mean = np.mean(probs, axis=1)
-    ed = np.sum(mean * loss_fn(mean, None), axis=1) - np.mean(np.sum(probs * loss_fn(probs, None), axis=2), axis=1)
+    ed = np.sum(mean * loss_fn(mean, None), axis=1) - np.mean(
+        np.sum(probs * loss_fn(probs, None), axis=2), axis=1
+    )
     return ed
 
 
@@ -228,12 +236,16 @@ def epistemic_uncertainty_distance(probs: np.ndarray) -> np.ndarray:
     bounds = [(0, 1)] * probs.shape[2]
     eu = np.empty(probs.shape[0])
     for i in tqdm(range(probs.shape[0]), desc="Instances"):
-        res = minimize(fun=fun, x0=x0[i], bounds=bounds, constraints=constraints, args=probs[i])
+        res = minimize(
+            fun=fun, x0=x0[i], bounds=bounds, constraints=constraints, args=probs[i]
+        )
         eu[i] = 0.5 * res.fun
     return eu
 
 
-def upper_entropy(probs: np.ndarray, base: float = 2, n_jobs: int | None = None) -> np.ndarray:
+def upper_entropy(
+    probs: np.ndarray, base: float = 2, n_jobs: int | None = None
+) -> np.ndarray:
     """Compute the upper entropy of a credal set.
 
     Given the probs array the lower and upper probabilities are computed and the credal set is
@@ -256,13 +268,16 @@ def upper_entropy(probs: np.ndarray, base: float = 2, n_jobs: int | None = None)
         def fun(x: np.ndarray) -> np.ndarray:
             return -entropy(x, base=base)
 
-        bounds = list(zip(np.min(probs[i], axis=0), np.max(probs[i], axis=0), strict=False))
+        bounds = list(
+            zip(np.min(probs[i], axis=0), np.max(probs[i], axis=0), strict=False)
+        )
         res = minimize(fun=fun, x0=x0[i], bounds=bounds, constraints=constraints)
         return float(-res.fun)
 
     if n_jobs:
         ue = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(compute_upper_entropy)(i) for i in tqdm(range(probs.shape[0]), desc="Instances")
+            joblib.delayed(compute_upper_entropy)(i)
+            for i in tqdm(range(probs.shape[0]), desc="Instances")
         )
         ue = np.array(ue)
     else:
@@ -272,7 +287,9 @@ def upper_entropy(probs: np.ndarray, base: float = 2, n_jobs: int | None = None)
     return ue
 
 
-def lower_entropy(probs: np.ndarray, base: float = 2, n_jobs: int | None = None) -> np.ndarray:
+def lower_entropy(
+    probs: np.ndarray, base: float = 2, n_jobs: int | None = None
+) -> np.ndarray:
     """Compute the lower entropy of a credal set.
 
     Given the probs array the lower and upper probabilities are computed and the credal set is
@@ -299,13 +316,16 @@ def lower_entropy(probs: np.ndarray, base: float = 2, n_jobs: int | None = None)
         def fun(x: np.ndarray) -> np.ndarray:
             return entropy(x, base=base)
 
-        bounds = list(zip(np.min(probs[i], axis=0), np.max(probs[i], axis=0), strict=False))
+        bounds = list(
+            zip(np.min(probs[i], axis=0), np.max(probs[i], axis=0), strict=False)
+        )
         res = minimize(fun=fun, x0=x0[i], bounds=bounds, constraints=constraints)
         return float(res.fun)
 
     if n_jobs:
         le = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(compute_lower_entropy)(i) for i in tqdm(range(probs.shape[0]), desc="Instances")
+            joblib.delayed(compute_lower_entropy)(i)
+            for i in tqdm(range(probs.shape[0]), desc="Instances")
         )
         le = np.array(le)
     else:
@@ -315,7 +335,9 @@ def lower_entropy(probs: np.ndarray, base: float = 2, n_jobs: int | None = None)
     return le
 
 
-def upper_entropy_convex_hull(probs: np.ndarray, base: float = 2, n_jobs: int | None = None) -> np.ndarray:
+def upper_entropy_convex_hull(
+    probs: np.ndarray, base: float = 2, n_jobs: int | None = None
+) -> np.ndarray:
     """Compute the upper entropy of a credal set.
 
     Given the probs the convex hull defined by the extreme points in probs is considered.
@@ -339,12 +361,15 @@ def upper_entropy_convex_hull(probs: np.ndarray, base: float = 2, n_jobs: int | 
             prob = w @ extrema
             return -entropy(prob, base=base)
 
-        res = minimize(fun=fun, args=probs[i], x0=w0, bounds=bounds, constraints=constraints)
+        res = minimize(
+            fun=fun, args=probs[i], x0=w0, bounds=bounds, constraints=constraints
+        )
         return float(-res.fun)
 
     if n_jobs:
         ue = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(compute_upper_entropy_convex_hull)(i) for i in tqdm(range(probs.shape[0]), desc="Instances")
+            joblib.delayed(compute_upper_entropy_convex_hull)(i)
+            for i in tqdm(range(probs.shape[0]), desc="Instances")
         )
         ue = np.array(ue)
     else:
@@ -354,7 +379,9 @@ def upper_entropy_convex_hull(probs: np.ndarray, base: float = 2, n_jobs: int | 
     return ue
 
 
-def lower_entropy_convex_hull(probs: np.ndarray, base: float = 2, n_jobs: int | None = None) -> np.ndarray:
+def lower_entropy_convex_hull(
+    probs: np.ndarray, base: float = 2, n_jobs: int | None = None
+) -> np.ndarray:
     """Compute the lower entropy of a credal set.
 
     Given the probs the convex hull defined by the extreme points in probs is considered.
@@ -378,12 +405,15 @@ def lower_entropy_convex_hull(probs: np.ndarray, base: float = 2, n_jobs: int | 
             prob = w @ extrema
             return entropy(prob, base=base)
 
-        res = minimize(fun=fun, args=probs[i], x0=w0, bounds=bounds, constraints=constraints)
+        res = minimize(
+            fun=fun, args=probs[i], x0=w0, bounds=bounds, constraints=constraints
+        )
         return float(res.fun)
 
     if n_jobs:
         le = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(compute_lower_entropy_convex_hull)(i) for i in tqdm(range(probs.shape[0]), desc="Instances")
+            joblib.delayed(compute_lower_entropy_convex_hull)(i)
+            for i in tqdm(range(probs.shape[0]), desc="Instances")
         )
         le = np.array(le)
     else:

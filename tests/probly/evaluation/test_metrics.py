@@ -54,7 +54,9 @@ def validate_metric(metric: float) -> None:
 
 
 def test_expected_calibration_error() -> None:
-    probs = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]])
+    probs = np.array(
+        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]
+    )
     targets = np.array([0, 1, 2, 0])
     ece = expected_calibration_error(probs, targets)
     validate_metric(ece)
@@ -92,7 +94,9 @@ def test_efficiency(
     validate_metric(eff)
 
 
-def test_coverage_convex_hull(sample_first_order_data: tuple[np.array, np.array]) -> None:
+def test_coverage_convex_hull(
+    sample_first_order_data: tuple[np.array, np.array],
+) -> None:
     probs, targets = sample_first_order_data
     cov = coverage_convex_hull(probs, targets)
     validate_metric(cov)

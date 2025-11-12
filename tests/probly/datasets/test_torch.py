@@ -17,15 +17,27 @@ from unittest.mock import MagicMock, mock_open, patch
 import numpy as np
 import torch
 
-from probly.datasets.torch import CIFAR10H, Benthic, ImageNetReaL, Plankton, Treeversity1, Treeversity6
+from probly.datasets.torch import (
+    CIFAR10H,
+    Benthic,
+    ImageNetReaL,
+    Plankton,
+    Treeversity1,
+    Treeversity6,
+)
 
 
-def patch_cifar10_init(self: CIFAR10, root: str, train: bool, transform: Callable[..., Any], download: bool) -> None:  # noqa: ARG001, the init requires these arguments
+def patch_cifar10_init(
+    self: CIFAR10, root: str, train: bool, transform: Callable[..., Any], download: bool
+) -> None:  # noqa: ARG001, the init requires these arguments
     self.root = root
 
 
 @patch("probly.datasets.torch.np.load")
-@patch("probly.datasets.torch.torchvision.datasets.CIFAR10.__init__", new=patch_cifar10_init)
+@patch(
+    "probly.datasets.torch.torchvision.datasets.CIFAR10.__init__",
+    new=patch_cifar10_init,
+)
 def test_cifar10h(mock_np_load: MagicMock, tmp_path: Path) -> None:
     counts = np.ones((5, 10))
     mock_np_load.return_value = counts
@@ -34,7 +46,9 @@ def test_cifar10h(mock_np_load: MagicMock, tmp_path: Path) -> None:
     assert torch.allclose(torch.sum(dataset.targets, dim=1), torch.ones(5))
 
 
-def patch_imagenet_init(self: ImageNet, root: str, split: str, transform: Callable[..., Any]) -> None:  # noqa: ARG001, the init requires these arguments
+def patch_imagenet_init(
+    self: ImageNet, root: str, split: str, transform: Callable[..., Any]
+) -> None:  # noqa: ARG001, the init requires these arguments
     self.samples = [
         ("some/path/ILSVRC2012_val_00000001.JPEG", 0),
         ("some/path/ILSVRC2012_val_00000002.JPEG", 1),
@@ -43,8 +57,13 @@ def patch_imagenet_init(self: ImageNet, root: str, split: str, transform: Callab
     self.classes = [0, 1, 2]
 
 
-@patch("probly.datasets.torch.torchvision.datasets.ImageNet.__init__", new=patch_imagenet_init)
-@patch("pathlib.Path.open", new_callable=mock_open, read_data=json.dumps([[], [1], [1, 2]]))
+@patch(
+    "probly.datasets.torch.torchvision.datasets.ImageNet.__init__",
+    new=patch_imagenet_init,
+)
+@patch(
+    "pathlib.Path.open", new_callable=mock_open, read_data=json.dumps([[], [1], [1, 2]])
+)
 def test_imagenetreal(tmp_path: Path) -> None:
     dataset = ImageNetReaL(str(tmp_path))
     for dist in dataset.dists:

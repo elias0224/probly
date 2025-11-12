@@ -39,7 +39,9 @@ def _split_lazy_type(lazy_type: LazyType) -> tuple[set[type], set[str]]:
     raise TypeError(msg)
 
 
-def _find_matching_string_type(cls: type, string_types: set[str] | dict[str, Any]) -> str | None:
+def _find_matching_string_type(
+    cls: type, string_types: set[str] | dict[str, Any]
+) -> str | None:
     """Check if the type's name matches any of the strings."""
     module = cls.__module__
     qualname = cls.__qualname__
@@ -56,7 +58,9 @@ def _find_matching_string_type(cls: type, string_types: set[str] | dict[str, Any
     return None
 
 
-def _find_closest_string_type(cls: type, string_types: set[str] | dict[str, Any]) -> tuple[type, str] | None:
+def _find_closest_string_type(
+    cls: type, string_types: set[str] | dict[str, Any]
+) -> tuple[type, str] | None:
     """Check if any type in the MRO matches any of the strings."""
     mro = cls.__mro__
     for super_cls in mro:

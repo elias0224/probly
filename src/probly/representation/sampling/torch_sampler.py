@@ -15,7 +15,9 @@ if TYPE_CHECKING:
     from pytraverse import State
 
 
-def _enforce_train_mode(obj: torch.nn.Module, state: State) -> tuple[torch.nn.Module, State]:
+def _enforce_train_mode(
+    obj: torch.nn.Module, state: State
+) -> tuple[torch.nn.Module, State]:
     if not obj.training:
         obj.train()
         state[sampler.CLEANUP_FUNCS].add(lambda: obj.train(False))

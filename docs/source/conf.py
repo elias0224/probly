@@ -123,7 +123,9 @@ html_sidebars = {
     ],
 }
 
-html_show_sourcelink = False  # to remove button next to dark mode showing source in txt format
+html_show_sourcelink = (
+    False  # to remove button next to dark mode showing source in txt format
+)
 
 # -- Autodoc ---------------------------------------------------------------------------------------
 autosummary_generate = True

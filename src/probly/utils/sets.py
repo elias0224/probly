@@ -21,7 +21,11 @@ def powerset(iterable: Iterable[int]) -> list[tuple[()]]:
 
     """
     s = list(iterable)
-    return list(itertools.chain.from_iterable(itertools.combinations(s, r) for r in range(len(s) + 1)))
+    return list(
+        itertools.chain.from_iterable(
+            itertools.combinations(s, r) for r in range(len(s) + 1)
+        )
+    )
 
 
 def capacity(q: np.ndarray, a: Iterable[int]) -> np.ndarray:

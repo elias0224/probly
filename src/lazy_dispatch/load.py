@@ -12,7 +12,9 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 
-def lazy_import(name: str, package: str | None = None, register: bool = False) -> ModuleType:
+def lazy_import(
+    name: str, package: str | None = None, register: bool = False
+) -> ModuleType:
     """Lazily import a module."""
     if name in sys.modules:
         return sys.modules[name]

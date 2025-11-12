@@ -5,7 +5,9 @@ from __future__ import annotations
 import numpy as np
 
 
-def differential_entropy_gaussian(sigma2: float | np.ndarray, base: float = 2) -> float | np.ndarray:
+def differential_entropy_gaussian(
+    sigma2: float | np.ndarray, base: float = 2
+) -> float | np.ndarray:
     """Compute the differential entropy of a Gaussian distribution given the variance.
 
     https://en.wikipedia.org/wiki/Differential_entropy
@@ -37,7 +39,11 @@ def kl_divergence_gaussian(
     Returns:
         kl_div: float or numpy.ndarray shape (n_instances,), KL-divergence between the two Gaussian distributions
     """
-    kl_div = 0.5 * np.log(sigma22 / sigma21) / np.log(base) + (sigma21 + (mu1 - mu2) ** 2) / (2 * sigma22) - 0.5
+    kl_div = (
+        0.5 * np.log(sigma22 / sigma21) / np.log(base)
+        + (sigma21 + (mu1 - mu2) ** 2) / (2 * sigma22)
+        - 0.5
+    )
     return kl_div
 
 

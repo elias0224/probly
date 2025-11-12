@@ -73,7 +73,9 @@ class lazydispatch[A: Callable, Out]:  # noqa: N801
         self.delayed_registration_registry: dict[str | type, RegistrationFunction] = {}
         self.dispatch_on = dispatch_on
 
-    def dispatch(self, cls: type, *, delayed_register: bool = True) -> Callable[..., Out]:
+    def dispatch(
+        self, cls: type, *, delayed_register: bool = True
+    ) -> Callable[..., Out]:
         """Find the best available function for the given type or string."""
         delayed_registration_registry = self.delayed_registration_registry
         string_registry = self.string_registry
@@ -97,11 +99,15 @@ class lazydispatch[A: Callable, Out]:  # noqa: N801
 
         return self._singledispatcher.dispatch(cls)
 
-    def eager_register(self, cls: type | UnionType | Callable, func: Callable | None = None) -> Callable:
+    def eager_register(
+        self, cls: type | UnionType | Callable, func: Callable | None = None
+    ) -> Callable:
         """Eagerly register a new implementation for the given type or union type."""
         return self._singledispatcher.register(cls, func)  # type: ignore[arg-type]
 
-    def register(self, cls: LazyType | Callable, func: Callable | None = None) -> Callable:
+    def register(
+        self, cls: LazyType | Callable, func: Callable | None = None
+    ) -> Callable:
         """Register a new implementation for the given type or string."""
         if is_valid_dispatch_type(cls):  # type: ignore[arg-type]
             if func is None:
@@ -141,13 +147,17 @@ class lazydispatch[A: Callable, Out]:  # noqa: N801
         return func  # type: ignore[return-value]
 
     @overload
-    def delayed_register(self, cls: LazyType) -> Callable[[RegistrationFunction], RegistrationFunction]: ...
+    def delayed_register(
+        self, cls: LazyType
+    ) -> Callable[[RegistrationFunction], RegistrationFunction]: ...
 
     @overload
     def delayed_register(self, cls: RegistrationFunction) -> RegistrationFunction: ...
 
     @overload
-    def delayed_register(self, cls: LazyType, func: RegistrationFunction) -> RegistrationFunction: ...
+    def delayed_register(
+        self, cls: LazyType, func: RegistrationFunction
+    ) -> RegistrationFunction: ...
 
     def delayed_register(
         self,
@@ -198,4 +208,6 @@ class lazydispatch[A: Callable, Out]:  # noqa: N801
         if not args:
             msg = f"{self.funcname} requires at least 1 positional argument"
             raise TypeError(msg)
-        return self.dispatch(self.dispatch_on(*args, **kwargs).__class__)(*args, **kwargs)
+        return self.dispatch(self.dispatch_on(*args, **kwargs).__class__)(
+            *args, **kwargs
+        )

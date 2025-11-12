@@ -127,6 +127,11 @@ def mutual_information(probs: np.ndarray) -> np.ndarray:
     mu_mean = np.mean(probs[:, :, 0], axis=1)
     sigma2_mean = np.mean(probs[:, :, 1], axis=1) + np.var(probs[:, :, 0], axis=1)
     mu_mean = np.repeat(np.expand_dims(mu_mean, 1), repeats=probs.shape[1], axis=1)
-    sigma2_mean = np.repeat(np.expand_dims(sigma2_mean, 1), repeats=probs.shape[1], axis=1)
-    mi = np.mean(kl_divergence_gaussian(probs[:, :, 0], probs[:, :, 1], mu_mean, sigma2_mean), axis=1)
+    sigma2_mean = np.repeat(
+        np.expand_dims(sigma2_mean, 1), repeats=probs.shape[1], axis=1
+    )
+    mi = np.mean(
+        kl_divergence_gaussian(probs[:, :, 0], probs[:, :, 1], mu_mean, sigma2_mean),
+        axis=1,
+    )
     return mi

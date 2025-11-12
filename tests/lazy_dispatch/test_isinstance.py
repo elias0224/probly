@@ -33,7 +33,9 @@ class TestIsInstance:
             (None, int | type(None), True),
         ],
     )
-    def test_eager_builtin_types(self, obj: object, classinfo: LazyType, expected: bool) -> None:
+    def test_eager_builtin_types(
+        self, obj: object, classinfo: LazyType, expected: bool
+    ) -> None:
         """Test lazy_isinstance with real types."""
         assert lazy_isinstance(obj, classinfo) == expected
 
@@ -52,7 +54,9 @@ class TestIsInstance:
             ({"a": 1}, ("list", "builtins.dict"), True),
         ],
     )
-    def test_lazy_builtin_types(self, obj: object, classinfo: LazyType, expected: bool) -> None:
+    def test_lazy_builtin_types(
+        self, obj: object, classinfo: LazyType, expected: bool
+    ) -> None:
         """Test lazy_isinstance with stringified types."""
         assert lazy_isinstance(obj, classinfo) == expected
 
@@ -71,6 +75,8 @@ class TestIsInstance:
             ({"a": 1}, ("dict", list), True),
         ],
     )
-    def test_mixed_builtin_types(self, obj: object, classinfo: LazyType, expected: bool) -> None:
+    def test_mixed_builtin_types(
+        self, obj: object, classinfo: LazyType, expected: bool
+    ) -> None:
         """Test lazy_isinstance with mixtures of real and stringified types."""
         assert lazy_isinstance(obj, classinfo) == expected

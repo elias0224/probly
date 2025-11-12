@@ -27,7 +27,10 @@ class EvidentialLogLoss(nn.Module):
         """
         alphas = inputs + 1.0
         strengths = torch.sum(alphas, dim=1)
-        loss = torch.mean(torch.log(strengths) - torch.log(alphas[torch.arange(targets.shape[0]), targets]))
+        loss = torch.mean(
+            torch.log(strengths)
+            - torch.log(alphas[torch.arange(targets.shape[0]), targets])
+        )
         return loss
 
 
@@ -51,7 +54,10 @@ class EvidentialCELoss(nn.Module):
         """
         alphas = inputs + 1.0
         strengths = torch.sum(alphas, dim=1)
-        loss = torch.mean(torch.digamma(strengths) - torch.digamma(alphas[torch.arange(targets.shape[0]), targets]))
+        loss = torch.mean(
+            torch.digamma(strengths)
+            - torch.digamma(alphas[torch.arange(targets.shape[0]), targets])
+        )
         return loss
 
 
@@ -106,9 +112,14 @@ class EvidentialKLDivergence(nn.Module):
         alphas_tilde = y + (1 - y) * alphas
         strengths_tilde = torch.sum(alphas_tilde, dim=1)
         k = torch.full((inputs.shape[0],), inputs.shape[1], device=inputs.device)
-        first = torch.lgamma(strengths_tilde) - torch.lgamma(k) - torch.sum(torch.lgamma(alphas_tilde), dim=1)
+        first = (
+            torch.lgamma(strengths_tilde)
+            - torch.lgamma(k)
+            - torch.sum(torch.lgamma(alphas_tilde), dim=1)
+        )
         second = torch.sum(
-            (alphas_tilde - 1) * (torch.digamma(alphas_tilde) - torch.digamma(strengths_tilde)[:, None]),
+            (alphas_tilde - 1)
+            * (torch.digamma(alphas_tilde) - torch.digamma(strengths_tilde)[:, None]),
             dim=1,
         )
         loss = torch.mean(first + second)
@@ -125,7 +136,9 @@ class EvidentialNIGNLLLoss(nn.Module):
         """Intializes an instance of the EvidentialNIGNLLLoss class."""
         super().__init__()
 
-    def forward(self, inputs: dict[str, torch.Tensor], targets: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, inputs: dict[str, torch.Tensor], targets: torch.Tensor
+    ) -> torch.Tensor:
         """Forward pass of the evidential normal inverse gamma negative log likelihood loss.
 
         Args:
@@ -140,7 +153,8 @@ class EvidentialNIGNLLLoss(nn.Module):
         loss = (
             0.5 * torch.log(torch.pi / inputs["nu"])
             - inputs["alpha"] * torch.log(omega)
-            + (inputs["alpha"] + 0.5) * torch.log((targets - inputs["gamma"]) ** 2 * inputs["nu"] + omega)
+            + (inputs["alpha"] + 0.5)
+            * torch.log((targets - inputs["gamma"]) ** 2 * inputs["nu"] + omega)
             + torch.lgamma(inputs["alpha"])
             - torch.lgamma(inputs["alpha"] + 0.5)
         ).mean()
@@ -154,7 +168,9 @@ class EvidentialRegressionRegularization(nn.Module):
         """Initialize an instance of the evidential regression regularization class."""
         super().__init__()
 
-    def forward(self, inputs: dict[str, torch.Tensor], targets: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, inputs: dict[str, torch.Tensor], targets: torch.Tensor
+    ) -> torch.Tensor:
         """Forward pass of the evidential regression regularization.
 
         Args:
@@ -165,7 +181,9 @@ class EvidentialRegressionRegularization(nn.Module):
             loss: torch.Tensor, mean loss value
 
         """
-        loss = (torch.abs(targets - inputs["gamma"]) * (2 * inputs["nu"] + inputs["alpha"])).mean()
+        loss = (
+            torch.abs(targets - inputs["gamma"]) * (2 * inputs["nu"] + inputs["alpha"])
+        ).mean()
         return loss
 
 
@@ -204,7 +222,11 @@ class FocalLoss(nn.Module):
         p_t = torch.sum(prob * targets_one_hot, dim=-1)
 
         log_prob = torch.log(prob)
-        loss = -self.alpha * (1 - p_t) ** self.gamma * torch.sum(log_prob * targets_one_hot, dim=-1)
+        loss = (
+            -self.alpha
+            * (1 - p_t) ** self.gamma
+            * torch.sum(log_prob * targets_one_hot, dim=-1)
+        )
 
         return torch.mean(loss)
 
@@ -225,7 +247,9 @@ class ELBOLoss(nn.Module):
         super().__init__()
         self.kl_penalty = kl_penalty
 
-    def forward(self, inputs: torch.Tensor, targets: torch.Tensor, kl: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, inputs: torch.Tensor, targets: torch.Tensor, kl: torch.Tensor
+    ) -> torch.Tensor:
         """Forward pass of the ELBO loss.
 
         Args:
@@ -270,7 +294,9 @@ class ExpectedCalibrationError(nn.Module):
             loss: torch.Tensor, mean loss value
         """
         confs, preds = torch.max(inputs, dim=1)
-        bin_indices = torch.bucketize(confs, self.bins.to(inputs.device), right=True) - 1
+        bin_indices = (
+            torch.bucketize(confs, self.bins.to(inputs.device), right=True) - 1
+        )
         num_instances = inputs.shape[0]
         loss = 0
         for i in range(self.num_bins):
@@ -323,9 +349,20 @@ class LabelRelaxationLoss(nn.Module):
 
         with torch.no_grad():
             inv_one_hot = 1 - F.one_hot(targets, inputs.shape[1])
-            targets_real = self.alpha * inputs_probs / torch.sum(inv_one_hot * inputs_probs, dim=1, keepdim=True)
+            targets_real = (
+                self.alpha
+                * inputs_probs
+                / torch.sum(inv_one_hot * inputs_probs, dim=1, keepdim=True)
+            )
             targets_real[torch.arange(targets.shape[0]), targets] = 1 - self.alpha
 
-        kl_div = torch.sum(F.kl_div(inputs_probs.log(), targets_real, log_target=False, reduction="none"), dim=1)
-        loss = torch.where(torch.sum(inv_one_hot * inputs_probs, dim=1) <= self.alpha, 0, kl_div)
+        kl_div = torch.sum(
+            F.kl_div(
+                inputs_probs.log(), targets_real, log_target=False, reduction="none"
+            ),
+            dim=1,
+        )
+        loss = torch.where(
+            torch.sum(inv_one_hot * inputs_probs, dim=1) <= self.alpha, 0, kl_div
+        )
         return loss.mean()

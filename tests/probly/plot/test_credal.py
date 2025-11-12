@@ -10,7 +10,9 @@ from probly.plot.credal import credal_set_plot, simplex_plot
 
 
 def test_simplex_plot_outputs() -> None:
-    probs = np.array([[1 / 3, 1 / 3, 1 / 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    probs = np.array(
+        [[1 / 3, 1 / 3, 1 / 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    )
     fig, ax = simplex_plot(probs)
     assert isinstance(fig, plt.Figure)
     assert isinstance(ax, plt.Axes)
@@ -19,7 +21,9 @@ def test_simplex_plot_outputs() -> None:
 
 
 def test_credal_set_plot() -> None:
-    probs = np.array([[1 / 3, 1 / 3, 1 / 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    probs = np.array(
+        [[1 / 3, 1 / 3, 1 / 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    )
     fig, ax = credal_set_plot(probs)
     assert isinstance(fig, plt.Figure)
     assert isinstance(ax, plt.Axes)

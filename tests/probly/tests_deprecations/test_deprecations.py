@@ -36,11 +36,15 @@ def feature_raises_deprecation_warning(
         warnings.simplefilter("always", DeprecationWarning)
         feature.call(request)
 
-    deprecation_warnings = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    deprecation_warnings = [
+        w for w in caught if issubclass(w.category, DeprecationWarning)
+    ]
 
     # check if any deprecation warning matches the expected regex
     if not any(re.search(expected_msg, str(w.message)) for w in deprecation_warnings):
-        formatted = "\n".join(f"{w.category.__name__}: {w.message}" for w in deprecation_warnings)
+        formatted = "\n".join(
+            f"{w.category.__name__}: {w.message}" for w in deprecation_warnings
+        )
         source_file = inspect.getsourcefile(feature.call)
         source_line = inspect.getsourcelines(feature.call)[1]
         pytest.fail(
@@ -52,7 +56,9 @@ def feature_raises_deprecation_warning(
 
 
 @pytest.mark.parametrize("feature", DEPRECATED_FEATURES, ids=lambda f: f.name)
-def test_deprecated_features(feature: DeprecatedFeature, request: pytest.FixtureRequest) -> None:
+def test_deprecated_features(
+    feature: DeprecatedFeature, request: pytest.FixtureRequest
+) -> None:
     """Tests the deprecated initialization with path_to_values."""
     # check if the feature should already be removed
     feature_should_be_removed(feature)

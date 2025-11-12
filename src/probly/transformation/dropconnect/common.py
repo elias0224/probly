@@ -19,7 +19,9 @@ dropconnect_traverser = lazydispatch_traverser[object](name="dropconnect_travers
 
 def register(cls: LazyType, traverser: RegisteredLooseTraverser) -> None:
     """Register a class to be replaced by DropConnect layers."""
-    dropconnect_traverser.register(cls=cls, traverser=traverser, skip_if=is_first_layer, vars={"p": P})
+    dropconnect_traverser.register(
+        cls=cls, traverser=traverser, skip_if=is_first_layer, vars={"p": P}
+    )
 
 
 def dropconnect[T: Predictor](base: T, p: float = 0.25) -> T:
