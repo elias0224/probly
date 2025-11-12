@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 from typing import Tuple, Any, NoReturn
 
-# 依赖可选
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
 flax = pytest.importorskip("flax")
@@ -50,22 +49,19 @@ def _maybe_array(x: Any):
 
 
 def _linear_in_out_by_params(layer: nnx.Linear) -> Tuple[int, int]:
-    # 先尝试 bias 推断 out_features
     for name in ("bias", "b"):
         if hasattr(layer, name):
             arr = _maybe_array(getattr(layer, name))
             if arr is not None and getattr(arr, "ndim", 0) == 1:
                 out_features = int(arr.shape[0])
-                return -1, out_features  # in_features 未知，用 -1 占位
+                return -1, out_features 
 
-    # 再尝试 kernel/weight
     for name in ("kernel", "weight", "w"):
         if hasattr(layer, name):
             arr = _maybe_array(getattr(layer, name))
             if arr is not None and getattr(arr, "ndim", 0) == 2:
                 return int(arr.shape[0]), int(arr.shape[1])
 
-    # 最后穷举属性里可能的数组
     for k in dir(layer):
         if k.startswith("_"):
             continue
