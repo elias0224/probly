@@ -1,24 +1,25 @@
 from __future__ import annotations
 
-from typing import Any, Callable, NoReturn
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, NoReturn, cast
 
 import pytest
 
-# Optional dependency: if torch is unavailable, skip the whole file
+# Optional dependency: torch not available -> skip whole file
 try:
     import torch
     from torch import nn
-except Exception:
+except ImportError:
     pytest.skip("torch not available", allow_module_level=True)
 
-# Top-level import of the module under test
 from probly.transformation.evidential import regression as er
 
 
 def _die(msg: str) -> NoReturn:
     """Unified skip helper that also keeps mypy from complaining about missing return."""
     pytest.skip(msg)
-    raise AssertionError("unreachable")  # pragma: no cover
+    error_message = "unreachable"
+    raise AssertionError(error_message)  # pragma: no cover
 
 
 def _get_evidential_transform() -> Callable[..., Any]:
@@ -32,70 +33,85 @@ def _get_evidential_transform() -> Callable[..., Any]:
     ):
         fn = getattr(er, name, None)
         if callable(fn):
-            return fn
+            return cast(Callable[..., Any], fn)
     _die(
-        "No evidential regression transform found in probly.transformation.evidential.regression"
+        "No evidential regression transform found in probly.transformation.evidential.regression",
     )
 
 
 def _first_linear_in_features(model: nn.Module) -> int:
-    for m in model.modules():
-        if isinstance(m, nn.Linear):
-            return int(m.in_features)
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            return int(module.in_features)
     _die("Fixture model has no nn.Linear; cannot infer input feature size")
 
 
 def _last_linear_out_features(model: nn.Module) -> int:
     last: nn.Linear | None = None
-    for m in model.modules():
-        if isinstance(m, nn.Linear):
-            last = m
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            last = module
     if last is None:
         _die("Model has no nn.Linear; cannot infer output feature size")
     return int(last.out_features)
 
 
 def _first_conv_spec(model: nn.Module) -> tuple[int, int, int]:
-    for m in model.modules():
-        if isinstance(m, nn.Conv2d):
-            k = m.kernel_size
-            kH, kW = (k, k) if isinstance(k, int) else k
-            return int(m.in_channels), int(kH), int(kW)
+    for module in model.modules():
+        if isinstance(module, nn.Conv2d):
+            kernel = module.kernel_size
+            kernel_h, kernel_w = (kernel, kernel) if isinstance(kernel, int) else kernel
+            return int(module.in_channels), int(kernel_h), int(kernel_w)
     _die("Fixture model has no nn.Conv2d; conv-forward test not applicable")
 
 
-def _try_unpack(y):
-    target = ("mu", "v", "alpha", "beta")
+def _try_unpack(
+    y: object,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor] | None:
+    """Best-effort unpacking into (mu, v, alpha, beta)."""
+    # 1) Mapping with the right keys
+    if isinstance(y, Mapping) and {"mu", "v", "alpha", "beta"}.issubset(y.keys()):
+        mu = cast(torch.Tensor, y["mu"])
+        v = cast(torch.Tensor, y["v"])
+        alpha = cast(torch.Tensor, y["alpha"])
+        beta = cast(torch.Tensor, y["beta"])
+        return mu, v, alpha, beta
 
-    if isinstance(y, dict):
-        if all(k in y for k in target):
-            return y["mu"], y["v"], y["alpha"], y["beta"]
-        for v in y.values():
-            out = _try_unpack(v)
-            if out is not None:
-                return out
+    # 2) Object with attributes mu, v, alpha, beta
+    if hasattr(y, "mu") and hasattr(y, "v") and hasattr(y, "alpha") and hasattr(y, "beta"):
+        mu = cast(torch.Tensor, y.mu)
+        v = cast(torch.Tensor, y.v)
+        alpha = cast(torch.Tensor, y.alpha)
+        beta = cast(torch.Tensor, y.beta)
+        return mu, v, alpha, beta
 
-    if all(hasattr(y, k) for k in target):
-        return y.mu, y.v, y.alpha, y.beta
+    # 3) Sequence of four tensors
+    if isinstance(y, Sequence) and len(y) == 4:
+        mu, v, alpha, beta = y
+        if all(isinstance(t, torch.Tensor) for t in (mu, v, alpha, beta)):
+            mu_t = cast(torch.Tensor, mu)
+            v_t = cast(torch.Tensor, v)
+            alpha_t = cast(torch.Tensor, alpha)
+            beta_t = cast(torch.Tensor, beta)
+            return mu_t, v_t, alpha_t, beta_t
 
-    if isinstance(y, (tuple, list)):
-        if len(y) == 4 and all(torch.is_tensor(t) for t in y):
-            return y[0], y[1], y[2], y[3]
-        for item in y:
-            out = _try_unpack(item)
-            if out is not None:
-                return out
+    # 4) Single tensor whose last dim can be split into 4 parts
+    if torch.is_tensor(y):
+        y_tensor = cast(torch.Tensor, y)
+        if y_tensor.ndim >= 2:
+            dim = y_tensor.shape[-1]
+            if dim % 4 == 0:
+                split = dim // 4
+                mu, v, alpha, beta = torch.split(y_tensor, split, dim=-1)
+                return mu, v, alpha, beta
 
-    if torch.is_tensor(y) and y.ndim >= 2:
-        D = y.shape[-1]
-        if D % 4 == 0:
-            split = D // 4
-            return torch.split(y, split, dim=-1)
-
+    # 5) Fallback: unsupported structure
     return None
 
 
-def _unpack_four(y):
+def _unpack_four(
+    y: Any,  # noqa: ANN401
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     out = _try_unpack(y)
     if out is None:
         _die("Cannot interpret model output as evidential {mu,v,alpha,beta}")
@@ -104,7 +120,8 @@ def _unpack_four(y):
 
 class TestTorchForward:
     def test_forward_and_parameter_shapes(
-        self, torch_model_small_2d_2d: nn.Sequential
+        self,
+        torch_model_small_2d_2d: nn.Sequential,
     ) -> None:
         evidential = _get_evidential_transform()
         base = torch_model_small_2d_2d
@@ -115,29 +132,29 @@ class TestTorchForward:
         model = evidential(base)
         model.eval()
 
-        B = 8
-        x = torch.randn(B, in_dim)
+        batch_size = 8
+        x = torch.randn(batch_size, in_dim)
 
         with torch.no_grad():
             y = model(x)
 
         mu, v, alpha, beta = _unpack_four(y)
 
-        for t in (mu, v, alpha, beta):
-            assert torch.is_tensor(t), "Each output head must be a tensor"
-            assert t.shape[-1] == out_dim, (
-                f"Expected last dim {out_dim}, got {t.shape[-1]}"
-            )
-            assert t.shape[0] == B, f"Expected batch {B}, got {t.shape[0]}"
+        for tensor in (mu, v, alpha, beta):
+            assert torch.is_tensor(tensor), "Each output head must be a tensor"
+            assert tensor.shape[-1] == out_dim, f"Expected last dim {out_dim}, got {tensor.shape[-1]}"
+            assert tensor.shape[0] == batch_size, f"Expected batch {batch_size}, got {tensor.shape[0]}"
 
-        for name, t in zip(("mu", "v", "alpha", "beta"), (mu, v, alpha, beta)):
-            assert torch.isfinite(t).all(), f"{name} contains non-finite values"
+        for name, tensor in zip(
+            ("mu", "v", "alpha", "beta"),
+            (mu, v, alpha, beta),
+            strict=False,
+        ):
+            assert torch.isfinite(tensor).all(), f"{name} contains non-finite values"
 
-        for name, t in zip(("v", "alpha", "beta"), (v, alpha, beta)):
-            assert torch.is_floating_point(t), (
-                f"{name} has non-floating dtype: {t.dtype}"
-            )
-            assert (t > 0).all(), f"{name} must be positive"
+        for name, tensor in zip(("v", "alpha", "beta"), (v, alpha, beta), strict=False):
+            assert torch.is_floating_point(tensor), f"{name} has non-floating dtype: {tensor.dtype}"
+            assert (tensor > 0).all(), f"{name} must be positive"
 
     def test_forward_conv_model(self, torch_conv_linear_model: nn.Sequential) -> None:
         evidential = _get_evidential_transform()
