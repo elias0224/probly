@@ -10,5 +10,4 @@
    :toctree:
    :recursive:
 
-   flax
    torch
