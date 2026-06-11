@@ -12,7 +12,7 @@ sys.path.insert(0, str(_here))  # make _sphinx_helpers importable
 sys.path.insert(0, str(_here.parent / "src"))
 sys.path.insert(0, str(_here.parent.parent))  # make examples.utils importable
 
-from _sphinx_helpers import make_linkcode_resolve  # noqa: E402
+from _sphinx_helpers import make_linkcode_resolve, scrub_external_dependencies  # noqa: E402
 
 import probly  # noqa: E402
 
@@ -171,9 +171,13 @@ _SKIP_XREF_NAMES = frozenset(
 )
 
 
-def setup(_app: Sphinx) -> None:
-    """Patch the Python domain resolver to skip ambiguous short names."""
+def setup(app: Sphinx) -> None:
+    """Patch the Python domain resolver and register incremental-build hooks."""
     from sphinx.domains.python import PythonDomain  # noqa: PLC0415
+
+    # Keep pages from being marked outdated by mtime changes of installed
+    # packages (CI recreates the venv each run); see the helper's docstring.
+    app.connect("env-updated", scrub_external_dependencies)
 
     _orig_resolve = PythonDomain.resolve_xref
 

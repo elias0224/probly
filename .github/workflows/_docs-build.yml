@@ -44,30 +44,13 @@ jobs:
           restore-keys: |
             sphinx-docs-${{ hashFiles('uv.lock') }}-
       - name: Normalize file mtimes for incremental build
-        if: inputs.docs-cache
-        # A fresh checkout stamps every file with the current time, which would
-        # make Sphinx treat all sources and autodoc dependencies as outdated.
-        # Reset tracked files to a fixed old mtime, then mark only files that
-        # changed since the commit the restored cache was built at as new. If
-        # that commit cannot be fetched, mtimes stay current and the build
-        # falls back to a full re-read (examples are still skipped via MD5).
-        run: |
-          if [ -f docs/build/cache-base-sha ]; then
-            base="$(cat docs/build/cache-base-sha)"
-            git fetch --depth=1 origin "$base" 2>/dev/null || true
-            if git cat-file -e "$base" 2>/dev/null; then
-              git ls-files -z | xargs -0 touch -t 200001010000
-              git diff --name-only -z "$base" HEAD | xargs -0 -r touch
-            fi
-          fi
-      - name: Record cache base commit
-        # Written before the build so even a failed run labels its saved cache
-        # with the commit its doctrees were built from.
-        run: |
-          mkdir -p docs/build
-          echo "$SHA" > docs/build/cache-base-sha
-        env:
-          SHA: ${{ github.sha }}
+        # A fresh checkout stamps every file with the current time, which
+        # would make Sphinx treat all sources and autodoc dependencies as
+        # outdated. Files whose checksum matches the manifest stored in the
+        # restored cache get a fixed old mtime; changed or new files keep
+        # their fresh mtime and are rebuilt. Runs unconditionally so cold
+        # builds produce the manifest for the cache they save.
+        run: uv run python docs/source/_normalize_source_mtimes.py
       - name: Prune stale API pages
         run: uv run python docs/source/_prune_stale_api.py
       - name: Invalidate cached examples whose dependencies changed

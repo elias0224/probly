@@ -7,12 +7,16 @@ import hashlib
 import importlib
 import inspect
 import json
+import os
 from pathlib import Path
 import sys
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from sphinx.application import Sphinx
+    from sphinx.environment import BuildEnvironment
 
 REPO_ROOT_HELPERS = Path(__file__).resolve().parents[2]
 
@@ -113,6 +117,35 @@ def reset_probly_dep_tracking(gallery_conf: dict[str, Any], fname: str | None, w
         return
     manifest = matches[0].with_name(matches[0].name + DEPS_SUFFIX)
     manifest.write_text(json.dumps(deps, sort_keys=True, indent=0) + "\n")
+
+
+def scrub_external_dependencies(app: Sphinx, env: BuildEnvironment) -> None:
+    """Drop recorded page dependencies on installed packages.
+
+    autodoc records the source file of every object a page documents,
+    including files of installed packages (e.g. autodoc's own sentinels
+    module or torch base classes picked up via inherited members). Installed
+    files get fresh mtimes whenever CI recreates the virtual environment, so
+    every page depending on one would be re-read on each warm build even
+    though nothing changed. A dependency is treated as external when its
+    path has a ``site-packages`` component (the venv lives inside the
+    checkout) or lies outside the repository. Dropping these is safe because
+    package upgrades change ``uv.lock``, which is part of the CI cache key
+    and forces a cold build anyway. Connected to the ``env-updated`` event,
+    which fires after reading and before the environment is pickled.
+
+    Args:
+        app: The Sphinx application (unused).
+        env: The build environment whose dependency map is scrubbed.
+    """
+    del app
+    for deps in env.dependencies.values():
+        external = set()
+        for dep in deps:
+            full = Path(os.path.normpath(os.path.join(env.srcdir, os.fspath(dep))))
+            if "site-packages" in full.parts or not full.is_relative_to(REPO_ROOT_HELPERS):
+                external.add(dep)
+        deps.difference_update(external)
 
 
 def make_linkcode_resolve(repo_root: Path) -> Callable[[str, dict[str, str]], str | None]:
