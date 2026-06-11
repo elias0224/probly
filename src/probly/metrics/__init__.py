@@ -1,4 +1,4 @@
-"""Metrics with backend dispatch for NumPy, PyTorch, and JAX."""
+"""Metrics with backend dispatch for NumPy, PyTorch, and JAX (v3 docstring test)."""
 
 from __future__ import annotations
 
