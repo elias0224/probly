@@ -28,7 +28,7 @@ def compute_absolute_error_score_torch(y_pred: torch.Tensor, y_true: torch.Tenso
 
 
 @absolute_error_score.register(TorchSample)
-def compute_absolute_error_score_torch_sample(
+def compute_absolute_error_score_torch_sampled(
     y_pred: TorchSample,
     y_true: torch.Tensor | TorchSample,
 ) -> torch.Tensor:
