@@ -115,3 +115,5 @@ for fold, (train_idx, test_idx) in enumerate(KFold(n_splits=5, shuffle=True, ran
 for name, vals in res.items():
     covs, sizes = zip(*vals)
     print(f"{name} — coverage: {np.mean(covs):.3f} ± {np.std(covs):.3f}, avg set size: {np.mean(sizes):.3f} ± {np.std(sizes):.3f}")
+
+# v3 cache test marker
