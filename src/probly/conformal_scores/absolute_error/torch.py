@@ -11,7 +11,10 @@ from ._common import absolute_error_score
 
 @absolute_error_score.register(torch.Tensor)
 def compute_absolute_error_score_torch(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
-    """Absolute error for PyTorch tensors."""
+    """Absolute error for PyTorch tensors.
+
+    Docstring-only edit for the docs cache test.
+    """
     y_pred_t = torch.as_tensor(y_pred, dtype=torch.float)
     y_true_t = torch.as_tensor(y_true, dtype=torch.float)
 
