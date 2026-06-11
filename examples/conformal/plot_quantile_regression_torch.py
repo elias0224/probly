@@ -19,7 +19,7 @@ shape ``(n_members, n_samples, 2)``.
 from __future__ import annotations
 
 import numpy as np
-import torch
+import torch  # cache test: executed during a failing build
 from torch import nn
 from sklearn.datasets import load_diabetes
 from sklearn.model_selection import KFold, train_test_split
