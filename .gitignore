@@ -308,3 +308,5 @@ scratch/
 # Paper (synced via Overleaf git)
 paper/
 paper_artifacts/
+
+# (docs-CI cache test v2: warm-floor measurement)
