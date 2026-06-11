@@ -19,7 +19,7 @@ def auc(x: object, y: object) -> object:
     Returns:
         Area under the curve.
     """
-    msg = f"No auc implementation registered for type {type(x)}"
+    msg = f"No auc implementation is registered for type {type(x)}"
     raise NotImplementedError(msg)
 
 
