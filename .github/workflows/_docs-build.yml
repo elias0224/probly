@@ -9,6 +9,10 @@ on:
         description: "Treat warnings as errors (-W flag)"
         type: boolean
         default: false
+      docs-cache:
+        description: "Restore the docs build cache; only changed examples and API pages are rebuilt"
+        type: boolean
+        default: false
 
 permissions:
     contents: read
@@ -27,8 +31,68 @@ jobs:
           enable-cache: true
       - name: Install dependencies
         run: uv sync
+      - name: Restore docs build cache
+        if: inputs.docs-cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: |
+            docs/source/auto_examples
+            docs/source/gen_modules
+            docs/source/api
+            docs/build
+          key: sphinx-docs-${{ hashFiles('uv.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            sphinx-docs-${{ hashFiles('uv.lock') }}-
+      - name: Normalize file mtimes for incremental build
+        if: inputs.docs-cache
+        # A fresh checkout stamps every file with the current time, which would
+        # make Sphinx treat all sources and autodoc dependencies as outdated.
+        # Reset tracked files to a fixed old mtime, then mark only files that
+        # changed since the commit the restored cache was built at as new. If
+        # that commit cannot be fetched, mtimes stay current and the build
+        # falls back to a full re-read (examples are still skipped via MD5).
+        run: |
+          if [ -f docs/build/cache-base-sha ]; then
+            base="$(cat docs/build/cache-base-sha)"
+            git fetch --depth=1 origin "$base" 2>/dev/null || true
+            if git cat-file -e "$base" 2>/dev/null; then
+              git ls-files -z | xargs -0 touch -t 200001010000
+              git diff --name-only -z "$base" HEAD | xargs -0 -r touch
+            fi
+          fi
+      - name: Record cache base commit
+        # Written before the build so even a failed run labels its saved cache
+        # with the commit its doctrees were built from.
+        run: |
+          mkdir -p docs/build
+          echo "$SHA" > docs/build/cache-base-sha
+        env:
+          SHA: ${{ github.sha }}
+      - name: Prune stale API pages
+        run: uv run python docs/source/_prune_stale_api.py
+      - name: Invalidate cached examples whose dependencies changed
+        # Examples record the local modules they import in .deps.json
+        # manifests during the build; this re-runs cached examples whose
+        # recorded dependency files have different code now.
+        run: uv run python docs/source/_invalidate_stale_examples.py
       - name: Build Sphinx documentation
         run: uv run sphinx-build ${{ inputs.strict && '-W' || '' }} -b html docs/source docs/build/html
+        env:
+          # Only re-execute examples whose source changed (MD5 check against
+          # the restored gallery output). Kept constant across all CI builds
+          # so the cached Sphinx environment never sees a config change;
+          # freshness comes from whether the cache was restored at all.
+          PROBLY_DOCS_RUN_STALE_EXAMPLES: "0"
+      - name: Save docs build cache
+        if: always()
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: |
+            docs/source/auto_examples
+            docs/source/gen_modules
+            docs/source/api
+            docs/build
+          key: sphinx-docs-${{ hashFiles('uv.lock') }}-${{ github.run_id }}
       - name: Upload docs artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:

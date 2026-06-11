@@ -1,8 +1,11 @@
 # Deploy docs to GitHub Pages
 name: Deploy Docs
 on:
-  push:
-    branches: [main]
+  schedule:
+    # One hour after the weekly Docs CI build so the docs build cache it
+    # saved can be restored here and unchanged pages are not rebuilt.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
 concurrency:
     group: pages
     cancel-in-progress: false
@@ -11,6 +14,8 @@ jobs:
     uses: ./.github/workflows/_docs-build.yml
     permissions:
         contents: read
+    with:
+        docs-cache: true
   deploy:
     runs-on: ubuntu-latest
     needs: build

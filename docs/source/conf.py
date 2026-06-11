@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import sys
 from typing import TYPE_CHECKING
@@ -109,7 +110,16 @@ sphinx_gallery_conf = {
     "plot_gallery": True,
     "download_all_examples": False,
     "notebook_extensions": set(),
-    "run_stale_examples": True,
+    # Re-run all examples by default (local builds). CI sets this to "0" for
+    # cached PR builds so only examples whose source changed are re-executed.
+    "run_stale_examples": os.environ.get("PROBLY_DOCS_RUN_STALE_EXAMPLES", "1") == "1",
+    # Record each example's imported local modules in a .deps.json manifest so
+    # _invalidate_stale_examples.py can re-run examples whose dependencies
+    # changed (sphinx-gallery's own MD5 check only sees the example file).
+    # The hook is given as a dotted string to keep the config value picklable
+    # and stable across incremental builds.
+    "reset_modules": ("matplotlib", "seaborn", "_sphinx_helpers.reset_probly_dep_tracking"),
+    "reset_modules_order": "both",
     # Don't kill the whole build if one example errors
     "abort_on_example_error": False,
     "default_thumb_file": str(REPO_ROOT / "docs" / "source" / "_static" / "logo" / "logo_light.png"),
