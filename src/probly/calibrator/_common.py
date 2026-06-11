@@ -26,7 +26,7 @@ def calibrate[**In, Out](
     *calib_args: In.args,
     **calib_kwargs: In.kwargs,
 ) -> None:
-    """Calibrate the predictor with the given arguments."""
+    """Calibrate the predictor with the given arguments test."""
     if hasattr(predictor, "calibrate"):
         return predictor.calibrate(*calib_args, **calib_kwargs)  # ty:ignore[call-non-callable]
     msg = "Calibration not implemented for this type of predictor."
