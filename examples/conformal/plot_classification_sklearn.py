@@ -2,7 +2,7 @@
 Classification Conformal Prediction — sklearn
 ==============================================
 
-Demonstrate all four classification non-conformity scores
+Demonstrate all four classification non-conformity score functions
 (:func:`~probly.conformal.scores.lac_score`,
 :class:`~probly.conformal.scores.APSScore`,
 :class:`~probly.conformal.scores.RAPSScore`,
