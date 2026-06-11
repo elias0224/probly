@@ -10,7 +10,7 @@ from flextype.registry_meta import ProtocolRegistry
 
 @runtime_checkable
 class Calibrator[**In, Out](ProtocolRegistry, Protocol, structural_checking=False):
-    """Protocol for generic calibrators."""
+    """Protocol for generic predictor calibrators."""
 
     @classmethod
     def __subclasshook__(cls, subclass: type) -> bool:
