@@ -29,5 +29,3 @@ uncertainty into their machine learning workflows.
    api
    references
    faq
-
-See :ref:`s11-nonexistent-label` for the cache test.
