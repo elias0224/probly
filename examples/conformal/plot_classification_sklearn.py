@@ -19,7 +19,7 @@ The workflow is the same for every score:
 
 from __future__ import annotations
 
-import numpy as np
+import numpy as np  # cache test: example source changed
 from sklearn.datasets import load_digits
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import KFold, train_test_split
