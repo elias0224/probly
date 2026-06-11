@@ -150,8 +150,8 @@ def make_linkcode_resolve(repo_root: Path) -> Callable[[str, dict[str, str]], st
         except (ModuleNotFoundError, AttributeError, TypeError, OSError, ValueError):
             return None
 
-        base = "https://github.com/n-teGruppe/probly"
-        branch = "sphinx_gallery"
+        base = "https://github.com/pwhofman/probly"
+        branch = "main"
         return f"{base}/blob/{branch}/{relpath}#L{lineno}"
 
     return linkcode_resolve
