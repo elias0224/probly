@@ -12,7 +12,11 @@ sys.path.insert(0, str(_here))  # make _sphinx_helpers importable
 sys.path.insert(0, str(_here.parent / "src"))
 sys.path.insert(0, str(_here.parent.parent))  # make examples.utils importable
 
-from _sphinx_helpers import make_linkcode_resolve, scrub_external_dependencies  # noqa: E402
+from _sphinx_helpers import (  # noqa: E402
+    ignore_installed_template_mtimes,
+    make_linkcode_resolve,
+    scrub_external_dependencies,
+)
 
 import probly  # noqa: E402
 
@@ -176,8 +180,10 @@ def setup(app: Sphinx) -> None:
     from sphinx.domains.python import PythonDomain  # noqa: PLC0415
 
     # Keep pages from being marked outdated by mtime changes of installed
-    # packages (CI recreates the venv each run); see the helper's docstring.
+    # packages (CI recreates the venv each run); see the helpers' docstrings.
     app.connect("env-updated", scrub_external_dependencies)
+    if os.environ.get("PROBLY_DOCS_RUN_STALE_EXAMPLES", "1") == "0":
+        app.connect("builder-inited", ignore_installed_template_mtimes)
 
     _orig_resolve = PythonDomain.resolve_xref
 

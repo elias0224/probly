@@ -148,6 +148,46 @@ def scrub_external_dependencies(app: Sphinx, env: BuildEnvironment) -> None:
         deps.difference_update(external)
 
 
+def ignore_installed_template_mtimes(app: Sphinx) -> None:
+    """Keep cached pages from being rewritten because installed templates look new.
+
+    The HTML builder rewrites every page whose output file is older than the
+    newest template, and theme/Sphinx templates live in site-packages, which
+    CI recreates with fresh mtimes on every run -- so a warm build would
+    rewrite all pages even when nothing changed. Installed templates only
+    really change with a package upgrade, which changes ``uv.lock`` and with
+    it the CI cache key, forcing a cold build anyway. The patched lookup
+    therefore considers only templates inside this repository (the project's
+    ``templates_path`` directories); editing one of those still rewrites all
+    pages. Connected to ``builder-inited`` in incremental builds only.
+
+    Args:
+        app: The Sphinx application whose HTML builder is patched.
+    """
+    templates = getattr(app.builder, "templates", None)
+    if templates is None:
+        print(f"template mtime patch skipped: no template loader on {type(app.builder).__name__}")  # noqa: T201
+        return
+
+    def newest_local_template_mtime() -> float:
+        mtimes: list[float] = []
+        for template_dir in app.config.templates_path:
+            # Extensions may append absolute site-packages paths (e.g.
+            # sphinx-gallery's components dir); those are installed templates
+            # and must be skipped like the theme's own.
+            base = Path(os.path.normpath(os.path.join(app.srcdir, os.fspath(template_dir))))
+            if "site-packages" in base.parts or not base.is_relative_to(REPO_ROOT_HELPERS):
+                continue
+            mtimes.extend(path.stat().st_mtime for path in base.rglob("*") if path.is_file())
+        return max(mtimes, default=0)
+
+    templates.newest_template_mtime = newest_local_template_mtime
+    print(  # noqa: T201
+        f"ignoring installed template mtimes (loader: {type(templates).__name__}, "
+        f"newest local template mtime: {newest_local_template_mtime()})"
+    )
+
+
 def make_linkcode_resolve(repo_root: Path) -> Callable[[str, dict[str, str]], str | None]:
     """Return a ``linkcode_resolve`` function bound to *repo_root*.
 
