@@ -14,11 +14,15 @@ permissions:
 jobs:
   doc_build:
     name: Test Documentation Build
-    # PR builds need the "build-docs" label (incremental, cached).
+    # PR builds need the "build-docs" label (incremental, cached) or the
+    # "build-docs-full" label (uncached, re-executes all examples).
     if: >-
       github.event_name != 'pull_request' ||
-      contains(github.event.pull_request.labels.*.name, 'build-docs')
+      contains(github.event.pull_request.labels.*.name, 'build-docs') ||
+      contains(github.event.pull_request.labels.*.name, 'build-docs-full')
     uses: ./.github/workflows/_docs-build.yml
     with:
       strict: true
-      docs-cache: ${{ github.event_name == 'pull_request' }}
+      docs-cache: >-
+        ${{ github.event_name == 'pull_request' &&
+            !contains(github.event.pull_request.labels.*.name, 'build-docs-full') }}
