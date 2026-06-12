@@ -12,7 +12,7 @@ from ._common import lac_score
 
 @lac_score.register(torch.Tensor)
 def compute_lac_score_torch(probs: torch.Tensor, y_cal: torch.Tensor | None = None) -> torch.Tensor:
-    """Compute the LAC score."""
+    """Compute the LAC (least ambiguous classifier) score."""
     probs_torch = torch.as_tensor(probs, dtype=torch.float)
     if probs_torch.ndim < 1:
         msg = (
