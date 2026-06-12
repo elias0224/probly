@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import sys
 from typing import TYPE_CHECKING
@@ -109,7 +110,8 @@ sphinx_gallery_conf = {
     "plot_gallery": True,
     "download_all_examples": False,
     "notebook_extensions": set(),
-    "run_stale_examples": True,
+    # CI sets this to "0" so only examples whose source changed re-execute.
+    "run_stale_examples": os.environ.get("PROBLY_DOCS_RUN_STALE_EXAMPLES", "1") == "1",
     # Don't kill the whole build if one example errors
     "abort_on_example_error": False,
     "default_thumb_file": str(REPO_ROOT / "docs" / "source" / "_static" / "logo" / "logo_light.png"),
