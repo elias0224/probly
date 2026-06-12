@@ -57,6 +57,9 @@ jobs:
         # workers don't race on torchvision's download/extraction
         run: uv run python -c "from probly_benchmark.data import load_mnist; load_mnist()"
       - name: Build Sphinx documentation
+        # benchmark branch: disable gallery example parallelism (1 = off)
+        env:
+          SPHINX_GALLERY_PARALLEL: "1"
         run: >
           uv run sphinx-build
           ${{ inputs.strict && '-W' || '' }}
