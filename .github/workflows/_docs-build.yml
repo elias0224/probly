@@ -56,26 +56,12 @@ jobs:
         # examples share ~/.cache/mnist; download once so parallel gallery
         # workers don't race on torchvision's download/extraction
         run: uv run python -c "from probly_benchmark.data import load_mnist; load_mnist()"
-      - name: Start memory monitor (temporary diagnostic)
-        # samples available memory every 5s to correlate with loky
-        # "A worker stopped" warnings; remove once diagnosed
-        run: |
-          nohup bash -c 'while true; do echo "$(date -u +%H:%M:%S) $(free -m | awk '"'"'/Mem:/ {print $7}'"'"') MiB avail"; sleep 5; done' > /tmp/mem.log 2>&1 &
       - name: Build Sphinx documentation
         run: >
           uv run sphinx-build
           ${{ inputs.strict && '-W' || '' }}
           -j auto
           -b html docs/source docs/build/html
-      - name: Report worker deaths (temporary diagnostic)
-        # dmesg shows whether a gallery worker was OOM-killed or segfaulted;
-        # remove once diagnosed
-        if: always()
-        run: |
-          echo "=== lowest available memory samples ==="
-          sort -t' ' -k2 -n /tmp/mem.log | head -5 || true
-          echo "=== kernel kills/crashes ==="
-          sudo dmesg | grep -iE "oom|out of memory|killed process|segfault" || echo "none found"
       - name: Save gallery cache
         if: always()
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5

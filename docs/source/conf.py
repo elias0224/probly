@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 from typing import TYPE_CHECKING
+import warnings
 
 _here = Path(__file__).resolve().parent
 sys.path.insert(0, str(_here))  # make _sphinx_helpers importable
@@ -116,12 +117,21 @@ sphinx_gallery_conf = {
     # Don't kill the whole build if one example errors
     "abort_on_example_error": False,
     # Execute examples in isolated worker processes (joblib/loky), one per
-    # two available CPUs (a full pool starves workers of memory on CI
-    # runners); set SPHINX_GALLERY_PARALLEL to override (1 disables,
+    # available CPU; set SPHINX_GALLERY_PARALLEL to override (1 disables,
     # sphinx-gallery treats it as off).
-    "parallel": int(os.environ.get("SPHINX_GALLERY_PARALLEL", max((os.process_cpu_count() or 2) // 2, 1))),
+    "parallel": int(os.environ.get("SPHINX_GALLERY_PARALLEL", os.process_cpu_count() or 1)),
     "default_thumb_file": str(REPO_ROOT / "docs" / "source" / "_static" / "logo" / "logo_light.png"),
 }
+
+# loky recycles a worker by design when its memory use grows more than
+# ~300MB beyond its post-first-job baseline (heavy torch examples trigger
+# this); the lost job is re-run in a fresh worker, but the executor still
+# warns in the main process. Harmless for the gallery build, so silence it.
+warnings.filterwarnings(
+    "ignore",
+    message="A worker stopped while some jobs were given to the executor",
+    category=UserWarning,
+)
 
 # -- Intersphinx -----------------------------------------------------------------------------------
 intersphinx_mapping = {
