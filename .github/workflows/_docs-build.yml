@@ -52,6 +52,10 @@ jobs:
               rm -f "${rst%.rst}".*
             fi
           done
+      - name: Pre-download example datasets
+        # examples share ~/.cache/mnist; download once so parallel gallery
+        # workers don't race on torchvision's download/extraction
+        run: uv run python -c "from probly_benchmark.data import load_mnist; load_mnist()"
       - name: Build Sphinx documentation
         run: >
           uv run sphinx-build

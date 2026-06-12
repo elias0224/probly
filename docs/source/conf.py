@@ -115,6 +115,9 @@ sphinx_gallery_conf = {
     "run_stale_examples": os.environ.get("FORCE_CLEAN"),
     # Don't kill the whole build if one example errors
     "abort_on_example_error": False,
+    # Execute examples in isolated worker processes (joblib/loky); set
+    # SPHINX_GALLERY_PARALLEL=1 to disable (sphinx-gallery treats 1 as off).
+    "parallel": int(os.environ.get("SPHINX_GALLERY_PARALLEL", "5")),
     "default_thumb_file": str(REPO_ROOT / "docs" / "source" / "_static" / "logo" / "logo_light.png"),
 }
 
