@@ -116,9 +116,10 @@ sphinx_gallery_conf = {
     # Don't kill the whole build if one example errors
     "abort_on_example_error": False,
     # Execute examples in isolated worker processes (joblib/loky), one per
-    # available CPU; set SPHINX_GALLERY_PARALLEL to override (1 disables,
+    # two available CPUs (a full pool starves workers of memory on CI
+    # runners); set SPHINX_GALLERY_PARALLEL to override (1 disables,
     # sphinx-gallery treats it as off).
-    "parallel": int(os.environ.get("SPHINX_GALLERY_PARALLEL", os.process_cpu_count() or 1)),
+    "parallel": int(os.environ.get("SPHINX_GALLERY_PARALLEL", max((os.process_cpu_count() or 2) // 2, 1))),
     "default_thumb_file": str(REPO_ROOT / "docs" / "source" / "_static" / "logo" / "logo_light.png"),
 }
 
