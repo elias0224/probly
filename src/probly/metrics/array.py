@@ -81,7 +81,7 @@ def roc_auc_score_numpy(y_true: np.ndarray, y_score: np.ndarray) -> np.ndarray:
 
 
 @roc_curve.register(np.ndarray)
-def roc_curve_numpy(y_true: np.ndarray, y_score: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def roc_curve_numpy(y_true: np.ndarray, y_score: np.ndarray, *, sample_weight: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute ROC curve along the last axis."""
     y_true = np.asarray(y_true, dtype=float)
     y_score = np.asarray(y_score, dtype=float)
