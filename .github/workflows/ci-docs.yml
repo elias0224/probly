@@ -2,10 +2,11 @@ name: Docs CI
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
+  schedule:
+    # Weekly full strict build; also seeds the docs build cache for PR builds.
+    - cron: "0 4 * * 1"
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
@@ -13,6 +14,11 @@ permissions:
 jobs:
   doc_build:
     name: Test Documentation Build
+    # PR builds need the "build-docs" label (incremental, cached).
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'build-docs')
     uses: ./.github/workflows/_docs-build.yml
     with:
       strict: true
+      docs-cache: ${{ github.event_name == 'pull_request' }}
