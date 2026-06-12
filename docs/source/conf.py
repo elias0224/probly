@@ -12,7 +12,12 @@ sys.path.insert(0, str(_here))  # make _sphinx_helpers importable
 sys.path.insert(0, str(_here.parent / "src"))
 sys.path.insert(0, str(_here.parent.parent))  # make examples.utils importable
 
-from _sphinx_helpers import make_linkcode_resolve  # noqa: E402
+from _sphinx_helpers import (  # noqa: E402
+    add_member_source_dependencies,
+    ignore_installed_template_mtimes,
+    make_linkcode_resolve,
+    scrub_external_dependencies,
+)
 
 import probly  # noqa: E402
 
@@ -236,8 +241,14 @@ def _rebuild_stale_backreferences(app: Sphinx) -> None:
 
 
 def setup(_app: Sphinx) -> None:
-    """Patch the Python domain resolver to skip ambiguous short names."""
+    """Patch the Python domain resolver and register incremental-build hooks."""
     from sphinx.domains.python import PythonDomain  # noqa: PLC0415
+
+    # Incremental-build accuracy hooks; see _sphinx_helpers.py docstrings.
+    _app.connect("env-updated", scrub_external_dependencies)
+    _app.connect("env-updated", add_member_source_dependencies)
+    if not os.environ.get("FORCE_CLEAN"):
+        _app.connect("builder-inited", ignore_installed_template_mtimes)
 
     _orig_resolve = PythonDomain.resolve_xref
 
