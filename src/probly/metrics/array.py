@@ -76,6 +76,7 @@ def precision_recall_curve_numpy(y_true: np.ndarray, y_score: np.ndarray) -> tup
 @roc_auc_score.register(np.ndarray)
 def roc_auc_score_numpy(y_true: np.ndarray, y_score: np.ndarray) -> np.ndarray:
     """Compute area under the ROC curve for NumPy arrays."""
+    # comment-only change for C1 test: no behavior, no docstring, no signature
     fpr, tpr, _ = roc_curve(y_true, y_score)
     return auc(fpr, tpr)  # ty:ignore[invalid-return-type]
 
