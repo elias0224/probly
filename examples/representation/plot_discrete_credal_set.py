@@ -38,3 +38,5 @@ print("Upper envelope (element-wise max across members):\n", discrete.upper())
 # On the simplex each member is shown as an individual scatter marker.
 plot_credal_set(discrete, title="Discrete credal set")
 plt.show()
+
+# meeting demo touch
