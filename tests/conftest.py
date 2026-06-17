@@ -1,5 +1,7 @@
 """Test fixtures for probly."""
 
+# no-op edit to benchmark warm incremental docs build (not docs-relevant)
+
 from __future__ import annotations
 
 pytest_plugins = [
