@@ -115,3 +115,5 @@ plt.show()
 config = PlotConfig(fill_alpha=0.5, line_width=2.5, marker_size=60)
 plot_credal_set(convex, title="Custom styling", config=config)
 plt.show()
+
+# benchmark: single-example edit to trigger MD5 re-run of just this example
