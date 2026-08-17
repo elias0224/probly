@@ -40,7 +40,10 @@ print(f"REPO_ROOT: {REPO_ROOT}")  # noqa: T201
 # builds of main leave it unset. DOCS_BASE_URL is set only in CI deploys.
 _DOCS_SOURCE_REF = os.environ.get("DOCS_SOURCE_REF", "")
 _DOCS_FLAVOR = "stable" if _DOCS_SOURCE_REF else "latest"
-_PAGES_ROOT = "https://pwhofman.github.io/probly"
+# DOCS_PAGES_ROOT lets a fork host the same site under its own Pages URL, so
+# the version switcher keeps linking within the site it was built for. The
+# upstream site leaves it unset.
+_PAGES_ROOT = os.environ.get("DOCS_PAGES_ROOT") or "https://pwhofman.github.io/probly"
 
 # Canonical URLs: stable pages are canonical for themselves; latest pages
 # declare the stable copy canonical so search engines index one version.

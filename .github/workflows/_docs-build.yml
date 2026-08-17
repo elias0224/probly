@@ -25,6 +25,10 @@ on:
         description: "Value for DOCS_BASE_URL (canonical base URL; empty = no canonical links)"
         type: string
         default: ""
+      pages-root:
+        description: "Value for DOCS_PAGES_ROOT (Pages site root for the version switcher; empty = upstream)"
+        type: string
+        default: ""
 
 permissions:
     contents: read
@@ -115,6 +119,7 @@ jobs:
         env:
           DOCS_SOURCE_REF: ${{ inputs.source-ref }}
           DOCS_BASE_URL: ${{ inputs.base-url }}
+          DOCS_PAGES_ROOT: ${{ inputs.pages-root }}
         run: uv run sphinx-build ${{ inputs.strict && '-W' || '' }} -j auto -b html docs/source docs/build/html
       - name: Save docs build cache
         if: always()
