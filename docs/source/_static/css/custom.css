@@ -66,3 +66,8 @@
 .toctree-wrapper.no-bullets ul {
   list-style: none;
 }
+
+/* Without markers the top level would sit indented next to the body text. */
+.toctree-wrapper.no-bullets > ul {
+  padding-left: 0;
+}
