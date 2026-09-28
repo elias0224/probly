@@ -28,6 +28,7 @@ its main advantages and disadvantages, and the paper it originates from, and
 links to a worked example in the gallery.
 
 .. toctree::
+    :class: no-bullets
     :maxdepth: 2
 
     second_order

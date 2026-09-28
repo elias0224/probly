@@ -14,6 +14,7 @@ questions into one of the four stages of the library, and :ref:`methods`
 catalogues the methods that implement them.
 
 .. toctree::
+    :class: no-bullets
     :maxdepth: 2
 
     why
