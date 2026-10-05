@@ -71,6 +71,55 @@ the predicted-class probability over MC samples). The risk-coverage helpers in `
 exact (every distinct criterion value is a threshold, ties are accepted together). Plots use Fira Sans if installed
 and fall back to the default font otherwise.
 
+## Fixed thresholds
+
+`scripts/fixed_threshold.py` reports risk and coverage of `ThresholdSelector(c)` for a grid of fixed c and the c each
+paper risk r* needs, raw and temperature scaled (fitted on the selection half): `uv run python scripts/fixed_threshold.py`.
+
+## Distribution shift and OOD
+
+Compares selection criteria on clean CIFAR-10, under covariate shift and on OOD data. Criteria (lower = more
+confident): `sr_base`, `sr_dropout`; MC dropout via probly: `mc_maxprob` (1 - max mean prob), `mc_total` (entropy of
+the mean), `mc_aleatoric` (expected entropy), `mc_epistemic` (mutual information), `mc_variance` (paper variance);
+deep ensemble of the 5 base models (one per seed, no extra training): `ens_maxprob`, `ens_total`, `ens_aleatoric`,
+`ens_epistemic`. There is only one ensemble, so its spread comes from the random splits only. The entropy
+decomposition goes through `probly.quantification.quantify`.
+
+Datasets: clean CIFAR-10 test, SVHN test, CIFAR-100 test (OOD), and the CIFAR-10 test set under gaussian noise,
+gaussian blur, contrast and pixelate at severities 1, 3, 5 (CIFAR-10-C parameters, `sgr_experiment/shift.py`).
+
+1. `scripts/dump_shift.py` writes `runs/seed{S}/shift/{dataset}.npz` (labels, both softmaxes, MC mean, the five MC
+   criteria; no raw samples) and skips existing files. Options: `--seeds`, `--runs`, `--data-dir`, `--num-samples`,
+   `--datasets`, `--subset`, `--batch-size`.
+2. `scripts/evaluate_shift.py` uses the protocol of `evaluate.py` (10 random 5k/5k splits of the clean test set).
+   Thresholds are always chosen on the clean selection half for each paper r*, two ways: `emp` (empirical risk <= r*)
+   and `sgr` (`metrics.sgr_threshold`, Algorithm 1 of Geifman and El-Yaniv, delta 0.001). It reports (a) AURC and
+   E-AURC plus risk, coverage, violation share and bound on the ID test half, (b) OOD AUROC, share of OOD accepted
+   and a mixed CIFAR-10 + OOD set, (c) risk, coverage and accuracy per corruption and severity.
+
+```powershell
+uv run python scripts/dump_shift.py
+uv run python scripts/evaluate_shift.py
+uv run python scripts/run_all.py --shift     # everything, including the shift stages
+```
+
+Artifacts in `results/shift/`: `table.md`, one csv per table (`id_aurc`, `id_thresholds`, `ood_*`, `mixed_*`,
+`shift_*`), `id_risk_coverage.png`, `ood_acceptance.png`, `shift_risk.png`.
+
+Runtime (inference only): about 156k images (10k clean, 26k SVHN, 10k CIFAR-100, 12 x 10k corrupted) x 100 MC samples
+per seed, i.e. roughly 15.6M VGG-16 forward passes per seed; expect on the order of half an hour to an hour per seed on
+the RTX 2070 Super. The evaluation takes about a minute.
+
+If the CIFAR-100 or SVHN download fails with an SSL "certificate has expired" error, fetch the files by hand
+(PowerShell) and re-run; torchvision then only verifies the MD5:
+
+```powershell
+curl.exe -L -k --retry 10 --retry-all-errors -C - -o data\cifar-100-python.tar.gz https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz
+curl.exe -L -k --retry 10 --retry-all-errors -C - -o data\test_32x32.mat http://ufldl.stanford.edu/housenumbers/test_32x32.mat
+```
+
+Expected MD5: `eb9058c3a382ffc7106e4002c42a8d85` (CIFAR-100 archive), `eb5a983be6a315427106f1b164d9cef3` (SVHN test).
+
 ## Reusing the trained models
 
 ```python

@@ -1,4 +1,4 @@
-"""Train, dump and evaluate all seeds; finished steps are skipped, so it can be re-run after an interruption."""
+"""Train, dump and evaluate all seeds (``--shift`` adds the distribution shift stages); finished steps are skipped."""
 
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ def main() -> None:
     p.add_argument("--n-splits", type=int, default=10)
     p.add_argument("--subset", type=int, default=None)
     p.add_argument("--evaluate", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--shift", action="store_true", help="After the other stages: dump_shift.py, then evaluate_shift.py.")
     a = p.parse_args()
 
     for seed in a.seeds:
@@ -48,6 +49,10 @@ def main() -> None:
             run("dump.py", "--seed", seed, "--runs", a.runs, "--data-dir", a.data_dir, "--num-samples", a.num_samples)
     if a.evaluate:
         run("evaluate.py", "--runs", a.runs, "--out", a.out, "--n-splits", a.n_splits)
+    if a.shift:
+        extra = ["--subset", a.subset] if a.subset else []
+        run("dump_shift.py", "--seeds", *a.seeds, "--runs", a.runs, "--data-dir", a.data_dir, "--num-samples", a.num_samples, *extra)
+        run("evaluate_shift.py", "--runs", a.runs, "--out", a.out / "shift", "--n-splits", a.n_splits)
 
 
 if __name__ == "__main__":

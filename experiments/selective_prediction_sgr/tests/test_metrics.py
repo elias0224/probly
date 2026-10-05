@@ -4,7 +4,17 @@ from __future__ import annotations
 
 import numpy as np
 
-from sgr_experiment.metrics import apply_threshold, coverage_at_risk, risk_coverage_curve, threshold_for_risk
+from sgr_experiment.metrics import (
+    apply_threshold,
+    aurc,
+    auroc,
+    coverage_at_risk,
+    e_aurc,
+    risk_bound,
+    risk_coverage_curve,
+    sgr_threshold,
+    threshold_for_risk,
+)
 
 # Sorted by criterion: 0.1(0), 0.2(1), 0.3(0), 0.4(0) -> risks 0, 1/2, 1/3, 1/4.
 C = np.array([0.4, 0.1, 0.3, 0.2])
@@ -56,3 +66,90 @@ def test_threshold_with_ties() -> None:
     # Accepting the tied pair costs risk 1/3, so r = 0.2 only allows the first instance.
     assert threshold_for_risk(c, loss, 0.2) == 0.1
     assert coverage_at_risk(c, loss, 0.2) == 0.25
+
+
+def test_aurc_hand_computed() -> None:
+    assert np.isclose(aurc(C, L), (0 + 1 / 2 + 1 / 3 + 1 / 4) / 4)
+    # Optimal ranking: risks 0, 0, 0, 1/4.
+    assert np.isclose(e_aurc(C, L), (0 + 1 / 2 + 1 / 3 + 1 / 4) / 4 - 1 / 16)
+
+
+def test_aurc_ties_share_the_group_risk() -> None:
+    c = np.array([0.1, 0.2, 0.2, 0.3])
+    loss = np.array([0.0, 1.0, 0.0, 0.0])
+    # Risks per instance: 0, 1/3, 1/3, 1/4 whatever the order of the tied pair.
+    assert np.isclose(aurc(c, loss), (0 + 1 / 3 + 1 / 3 + 1 / 4) / 4)
+    assert np.isclose(aurc(c, loss[[0, 2, 1, 3]]), aurc(c, loss))
+
+
+def test_e_aurc_zero_for_optimal_ranking() -> None:
+    loss = np.array([1.0, 0.0, 0.0, 1.0, 0.0])
+    assert np.isclose(e_aurc(loss + 0.01 * np.arange(5), loss), 0.0)
+
+
+def test_risk_bound_hand_checked() -> None:
+    # No errors: 1 - delta^(1/m).
+    assert np.isclose(risk_bound(0, 10, 0.05), 1 - 0.05**0.1)
+    assert risk_bound(3, 3, 0.05) == 1.0
+    assert risk_bound(1, 10, 0.05) > 0.1  # above the empirical risk
+
+
+def test_risk_bound_decreases_with_samples() -> None:
+    bounds = [risk_bound(round(0.02 * m), m, 0.001) for m in (100, 500, 2500, 12500)]
+    assert all(a > b for a, b in zip(bounds, bounds[1:], strict=False))
+    assert all(b >= 0.02 for b in bounds)
+
+
+def _random_problem(m: int = 20000) -> tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(0)
+    crit = rng.random(m)
+    return crit, (rng.random(m) < 0.1 * crit**3).astype(np.float64)
+
+
+def test_sgr_threshold_set_satisfies_bound() -> None:
+    crit, loss = _random_problem()
+    m = len(crit)
+    delta_step = 0.001 / np.ceil(np.log2(m))
+    for r_star in (0.01, 0.02, 0.05):
+        thr, bound = sgr_threshold(crit, loss, r_star)
+        assert np.isfinite(thr)
+        accepted = crit <= thr
+        k = int(loss[accepted].sum())
+        assert bound <= r_star
+        assert np.isclose(bound, risk_bound(k, int(accepted.sum()), delta_step))
+        assert bound >= loss[accepted].mean()
+        # The guaranteed threshold is more conservative than the empirical one.
+        assert thr <= threshold_for_risk(crit, loss, r_star)
+
+
+def test_sgr_threshold_hand_checked() -> None:
+    crit = np.arange(16, dtype=np.float64)
+    loss = np.zeros(16)
+    # 4 steps, delta' = 0.001; without errors B* = 1 - 0.001^(1/m_acc): 0.578 for 8 instances, 0.499 for 10.
+    # r* = 0.6: the search tests the sizes 8, 12, 14, 15, all feasible, and ends with 15 accepted instances.
+    thr, bound = sgr_threshold(crit, loss, 0.6, delta=0.004)
+    assert thr == 14.0
+    assert np.isclose(bound, 1 - 0.001 ** (1 / 15))
+    # r* = 0.5: 8 instances already fail, so the search keeps shrinking until nothing is accepted.
+    assert sgr_threshold(crit, loss, 0.5, delta=0.004) == (-np.inf, 1.0)
+
+
+def test_sgr_threshold_nothing_accepted() -> None:
+    thr, bound = sgr_threshold(np.array([0.1, 0.2, 0.3]), np.array([1.0, 1.0, 1.0]), 0.05)
+    assert thr == -np.inf
+    assert bound == 1.0
+
+
+def test_sgr_threshold_accepts_whole_tie_groups() -> None:
+    crit = np.repeat(np.arange(10, dtype=np.float64), 100)
+    loss = np.zeros(1000)
+    thr, _ = sgr_threshold(crit, loss, 0.05)
+    assert thr in set(range(10))
+    assert (crit <= thr).sum() % 100 == 0
+
+
+def test_auroc() -> None:
+    assert auroc(np.array([0.1, 0.2]), np.array([0.3, 0.4])) == 1.0
+    assert auroc(np.array([0.3, 0.4]), np.array([0.1, 0.2])) == 0.0
+    assert auroc(np.array([0.1, 0.3]), np.array([0.2, 0.4])) == 0.75
+    assert auroc(np.array([0.5, 0.5]), np.array([0.5])) == 0.5
