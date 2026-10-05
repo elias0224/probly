@@ -12,8 +12,8 @@ No risk bounds are computed.
 1. **base**: the plain VGG-16 variant of Liu and Deng (2015), with conv-block dropout (0.3 after the first conv,
    0.4 after every other non-final conv of a block) and no dropout before the two Linear layers. 250 epochs, SGD
    momentum 0.9, lr 0.1, weight decay 5e-4, lr x0.5 every 25 epochs, batch size 128, flip / 10% shift / 15 degree
-   rotation augmentation (border pixels repeated, like Keras' default `fill_mode="nearest"`), AMP and channels-last on
-   CUDA. The whole dataset is kept on the GPU and augmented there in batches, so no DataLoader workers are needed.
+   rotation augmentation (border pixels repeated, like Keras' default `fill_mode="nearest"`), AMP on CUDA
+   (channels-last is deliberately off, it was 4-5x slower here; `scripts/bench.py` measures it). The whole dataset is kept on the GPU and augmented there in batches, so no DataLoader workers are needed.
 2. **dropout**: `probly.transformation.dropout(base, p=0.5, predictor_type="logit_classifier")` inserts a dropout
    layer in front of each of the two Linear layers; this model is fine-tuned for 50 epochs (lr 0.01, x0.5 every 10).
    `--finetune-epochs` and `--finetune-lr` on `run_all.py` (or `--epochs/--lr/--step-size` on `train.py`) change it.

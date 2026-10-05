@@ -75,10 +75,8 @@ def main() -> None:
             msg = f"{base_path} not found; train stage base first."
             raise SystemExit(msg)
         model = to_mc_dropout(load_base(base_path), p=args.p)
+    # No channels-last: it was 4-5x slower for this network on an RTX 2070 Super (see scripts/bench.py).
     model = model.to(device)
-    # Channels-last lets the AMP convolutions use the tensor cores on CUDA.
-    memory_format = torch.channels_last if device.type == "cuda" else torch.contiguous_format
-    model = model.to(memory_format=memory_format)
     opt = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=args.step_size, gamma=0.5)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
@@ -102,7 +100,7 @@ def main() -> None:
         idx = torch.from_numpy(np.random.default_rng(args.seed).permutation(len(y_train))[: args.subset]).to(device)
         x_train, y_train = x_train[idx], y_train[idx]
     x_test, y_test = load_cifar10(args.data_dir, train=False, device=device)
-    x_test = normalize(x_test).contiguous(memory_format=memory_format)
+    x_test = normalize(x_test)
     loss_fn = nn.CrossEntropyLoss()
     acc = evaluate(model, x_test, y_test) if start_epoch >= args.epochs else float("nan")
     new_log = not log_path.exists() or start_epoch == 0
@@ -120,7 +118,6 @@ def main() -> None:
             total_loss = torch.zeros((), device=device)
             n = 0
             for x, y in train_batches(x_train, y_train, batch_size=args.batch_size, generator=gen):
-                x = x.contiguous(memory_format=memory_format)  # noqa: PLW2901
                 opt.zero_grad(set_to_none=True)
                 with torch.autocast(device.type, enabled=use_amp):
                     loss = loss_fn(model(x), y)
