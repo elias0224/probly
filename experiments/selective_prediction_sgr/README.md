@@ -78,7 +78,7 @@ merged into this throwaway branch). `evaluate.py` adds an SGR table (`SGRSelecto
 half: risk, coverage, violation share on the test half) and a coverage table (`CoverageSelector` calibrated on the
 selection half for each paper test coverage: realized coverage and risk next to the paper's risk). In
 `evaluate_shift.py` the `sgr` mode uses `SGRSelector`; `metrics.sgr_threshold` remains as a reference and the table
-"SGR: probly SelectorSGR vs the reference" counts how often the thresholds differ (they can differ by one instance
+"SGR: probly SGRSelector vs the reference" counts how often the thresholds differ (they can differ by one instance
 when almost everything is certifiable, since probly never tests the largest score, or with heavy ties) and how often
 nothing is certified. The third mode `cov` is label-free: a `CoverageSelector` calibrated on the clean selection half to
 the coverage the `emp` threshold reached there for the same r*; its risk and coverage on the test half, the shifted

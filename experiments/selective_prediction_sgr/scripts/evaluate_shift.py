@@ -288,7 +288,7 @@ def build_tables(acc: dict, data: dict[str, dict], out: Path, n_seeds: int, n_sp
         acc,
     )
     t.add(
-        "sgr_check", "SGR: probly SelectorSGR vs the reference sgr_threshold, and uncertified thresholds", ["criterion"],
+        "sgr_check", "SGR: probly SGRSelector vs the reference sgr_threshold, and uncertified thresholds", ["criterion"],
         [([c], [("refdiff", c)] + [("uncertified", r, c) for r in ID_RISKS]) for c in crits],
         [{"header": "thresholds differing from reference", "digits": 0, "mode": "count"}]
         + [{"header": f"uncertified r*={r}", "digits": 0, "mode": "count"} for r in ID_RISKS],
