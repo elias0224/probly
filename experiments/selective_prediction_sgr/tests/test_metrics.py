@@ -153,3 +153,38 @@ def test_auroc() -> None:
     assert auroc(np.array([0.3, 0.4]), np.array([0.1, 0.2])) == 0.0
     assert auroc(np.array([0.1, 0.3]), np.array([0.2, 0.4])) == 0.75
     assert auroc(np.array([0.5, 0.5]), np.array([0.5])) == 0.5
+
+
+def _selector_threshold(crit: np.ndarray, loss: np.ndarray, r_star: float) -> float:
+    import warnings  # noqa: PLC0415
+
+    from probly.selective_prediction import SGRSelector  # noqa: PLC0415
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        return float(SGRSelector(r_star, 0.001).calibrate(crit, loss).threshold)
+
+
+def test_probly_sgr_selector_matches_reference_on_continuous_scores() -> None:
+    for seed in range(5):
+        rng = np.random.default_rng(seed)
+        crit = rng.random(5000)
+        loss = (rng.random(5000) < 0.1 * crit**3).astype(np.float64)
+        # Risks below the risk of the whole set: probly never tests the largest score, ours can, so they would differ
+        # by one instance if almost everything was certifiable.
+        for r_star in (0.005, 0.01, 0.02):
+            assert _selector_threshold(crit, loss, r_star) == sgr_threshold(crit, loss, r_star)[0]
+
+
+def test_sgr_thresholds_with_ties_are_both_certified() -> None:
+    # With ties the two searches can end at different thresholds, because ours bisects over tie groups and probly's over
+    # instances, so the probe order differs. Both returned sets must still be certified.
+    rng = np.random.default_rng(0)
+    crit = np.round(rng.random(5000), 2)
+    loss = (rng.random(5000) < 0.1 * crit**3).astype(np.float64)
+    delta_step = 0.001 / np.ceil(np.log2(len(crit)))
+    for r_star in (0.01, 0.02, 0.05):
+        for thr in (sgr_threshold(crit, loss, r_star)[0], _selector_threshold(crit, loss, r_star)):
+            accepted = crit <= thr
+            assert accepted.any()
+            assert risk_bound(int(loss[accepted].sum()), int(accepted.sum()), delta_step) <= r_star

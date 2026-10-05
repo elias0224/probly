@@ -71,6 +71,19 @@ the predicted-class probability over MC samples). The risk-coverage helpers in `
 exact (every distinct criterion value is a threshold, ties are accepted together). Plots use Fira Sans if installed
 and fall back to the default font otherwise.
 
+## Selectors from probly
+
+`SGRSelector` and `CoverageSelector` come from probly (`probly.selective_prediction`; the `selective-prediction` branch is
+merged into this throwaway branch). `evaluate.py` adds an SGR table (`SGRSelector(r*, delta)` fitted on the selection
+half: risk, coverage, violation share on the test half) and a coverage table (`CoverageSelector` calibrated on the
+selection half for each paper test coverage: realized coverage and risk next to the paper's risk). In
+`evaluate_shift.py` the `sgr` mode uses `SGRSelector`; `metrics.sgr_threshold` remains as a reference and the table
+"SGR: probly SelectorSGR vs the reference" counts how often the thresholds differ (they can differ by one instance
+when almost everything is certifiable, since probly never tests the largest score, or with heavy ties) and how often
+nothing is certified. The third mode `cov` is label-free: a `CoverageSelector` calibrated on the clean selection half to
+the coverage the `emp` threshold reached there for the same r*; its risk and coverage on the test half, the shifted
+sets and the OOD sets (share accepted) show how the coverage guarantee drifts under shift.
+
 ## Fixed thresholds
 
 `scripts/fixed_threshold.py` reports risk and coverage of `ThresholdSelector(c)` for a grid of fixed c and the c each

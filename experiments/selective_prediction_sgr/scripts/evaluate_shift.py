@@ -1,9 +1,10 @@
 """Selection criteria on CIFAR-10, under covariate shift and on OOD data (thresholds always from clean CIFAR-10).
 
 Same seed x split protocol as ``evaluate.py``: ``n_splits`` permutations of the 10k clean test set, the first half
-selects the threshold, the second half is the test half. Per desired risk r* the threshold is chosen two ways: ``emp``
-(largest coverage with empirical selection-half risk <= r*) and ``sgr`` (Algorithm 1 of Geifman and El-Yaniv, with a
-confidence bound). Shifted and OOD sets are evaluated at these clean thresholds. The deep-ensemble criteria use the
+selects the threshold, the second half is the test half. Per desired risk r* the threshold is chosen three ways: ``emp``
+(largest coverage with empirical selection-half risk <= r*), ``sgr`` (probly's ``SGRSelector``, Algorithm 1 of Geifman
+and El-Yaniv, with a confidence bound; ``metrics.sgr_threshold`` is kept as a reference and compared) and ``cov``
+(probly's label-free ``CoverageSelector``, calibrated to the coverage that ``emp`` reached on the selection half). Shifted and OOD sets are evaluated at these clean thresholds. The deep-ensemble criteria use the
 base models (one per seed) as members; there is only one ensemble, so its spread comes from the random splits only.
 """
 
@@ -23,6 +24,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
+from probly.selective_prediction import CoverageSelector, SGRSelector  # noqa: E402
 from sgr_experiment.metrics import (  # noqa: E402
     apply_threshold,
     aurc,
@@ -90,7 +92,7 @@ FIGURE_GROUPS = {
 }
 ID_RISKS = [r for r, _, _ in PAPER]
 SHIFT_RISKS = [0.01, 0.03, 0.05]
-MODES = ["emp", "sgr"]
+MODES = ["emp", "sgr", "cov"]
 SHIFT_DATASETS = [corrupted_name(c, s) for c in CORRUPTIONS for s in SEVERITIES]
 PLOT_RISK = 0.03
 EPS = 1e-12
@@ -158,6 +160,8 @@ def fmt(values: list[float], digits: int, mode: str, mark_above: float | None = 
         return "n/a"
     if mode == "pct":
         return f"{v.mean() * 100:.0f}%"
+    if mode == "count":
+        return f"{int(v.sum())} of {v.size}"
     star = " *" if mark_above is not None and v.mean() > mark_above + EPS else ""
     if mode == "mean":
         return f"{v.mean():.{digits}f}{star}"
@@ -167,6 +171,14 @@ def fmt(values: list[float], digits: int, mode: str, mark_above: float | None = 
 def active_criteria(data: dict[str, dict]) -> list[str]:
     """Criteria available on the clean test set, in the order of ``CRITERIA``."""
     return [c for c in CRITERIA if data["cifar10"]["units"].get(c)]
+
+
+def sgr_selector_threshold(crit: np.ndarray, loss: np.ndarray, r: float, delta: float) -> tuple[float, float]:
+    """Threshold and bound of probly's ``SGRSelector`` (-inf and NaN if nothing is certified, without the warning)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        sel = SGRSelector(r, delta).calibrate(crit, loss)
+    return float(sel.threshold), float(sel.bound)
 
 
 def run_protocol(data: dict[str, dict], n_splits: int, split_seed: int, delta: float) -> dict[tuple, list[float]]:
@@ -197,8 +209,13 @@ def run_protocol(data: dict[str, dict], n_splits: int, split_seed: int, delta: f
                     acc["auroc", d, c].append(auroc(crit[test], data[d]["units"][c][u][0]))
                 for r in sorted(set(ID_RISKS) | set(SHIFT_RISKS)):
                     thr_emp = threshold_for_risk(crit[sel], loss[sel], r)
-                    thr_sgr, bound = sgr_threshold(crit[sel], loss[sel], r, delta)
-                    thresholds = {"emp": thr_emp, "sgr": thr_sgr}
+                    thr_sgr, bound = sgr_selector_threshold(crit[sel], loss[sel], r, delta)
+                    acc["refdiff", c].append(float(thr_sgr != sgr_threshold(crit[sel], loss[sel], r, delta)[0]))
+                    acc["uncertified", r, c].append(float(thr_sgr == -np.inf))
+                    # Label-free: the coverage the emp threshold reached on the selection half is the target.
+                    target = apply_threshold(crit[sel], loss[sel], thr_emp)[1]
+                    thr_cov = CoverageSelector(target).calibrate(crit[sel]).threshold if target > 0 else -np.inf
+                    thresholds = {"emp": thr_emp, "sgr": thr_sgr, "cov": thr_cov}
                     if r in ID_RISKS:
                         acc["bound", r, c].append(bound)
                     for mode, thr in thresholds.items():
@@ -270,6 +287,13 @@ def build_tables(acc: dict, data: dict[str, dict], out: Path, n_seeds: int, n_sp
         [{"header": "AURC x1000", "digits": 2, "mode": "ms"}, {"header": "E-AURC x1000", "digits": 2, "mode": "ms"}, {"header": "accuracy", "digits": 4, "mode": "ms"}],
         acc,
     )
+    t.add(
+        "sgr_check", "SGR: probly SelectorSGR vs the reference sgr_threshold, and uncertified thresholds", ["criterion"],
+        [([c], [("refdiff", c)] + [("uncertified", r, c) for r in ID_RISKS]) for c in crits],
+        [{"header": "thresholds differing from reference", "digits": 0, "mode": "count"}]
+        + [{"header": f"uncertified r*={r}", "digits": 0, "mode": "count"} for r in ID_RISKS],
+        acc,
+    )
     specs, rows = [], []
     for mode in MODES:
         specs += [{"header": f"{mode} risk", "digits": 4, "mode": "ms"}, {"header": f"{mode} cov", "digits": 4, "mode": "ms"}, {"header": f"{mode} viol", "digits": 0, "mode": "pct"}]
@@ -307,7 +331,9 @@ def build_tables(acc: dict, data: dict[str, dict], out: Path, n_seeds: int, n_sp
         "",
         f"{n_seeds} seeds x {n_splits} random 5k/5k splits of the clean test set; entries are mean +- std over all seed x split",
         "pairs. Thresholds come from the clean selection half: `emp` is the largest coverage with empirical risk <= r*,",
-        "`sgr` is Algorithm 1 of Geifman and El-Yaniv (delta 0.001). Ensemble criteria (`ens_*`) use the base models (one per seed) as",
+        "`sgr` is probly's SGRSelector (Algorithm 1 of Geifman and El-Yaniv, delta 0.001) and `cov` probly's",
+        "CoverageSelector, calibrated without labels to the selection-half coverage of `emp`. Ensemble criteria (`ens_*`)",
+        "use the base models (one per seed) as",
         "members; there is only one ensemble, so its spread comes from the random splits only. The mixed set and the shifted",
         "sets use the test half of the split (shifted sets: the corrupted versions of the same images).",
         "",
@@ -364,8 +390,8 @@ def plot_id(path: Path, clean: dict, crits: list[str]) -> None:
 
 
 def plot_ood(path: Path, acc: dict, ood: list[str], crits: list[str]) -> None:
-    """Share of OOD images accepted at the clean threshold for r* = 0.03 (top: emp, bottom: sgr)."""
-    fig, axes = plt.subplots(2, 1, figsize=(9, 6), sharex=True, sharey=True)
+    """Share of OOD images accepted at the clean threshold for r* = 0.03 (one row per mode)."""
+    fig, axes = plt.subplots(len(MODES), 1, figsize=(9, 3 * len(MODES)), sharex=True, sharey=True)
     width = 0.8 / len(ood)
     for ax, mode in zip(axes, MODES, strict=True):
         for j, d in enumerate(ood):
@@ -384,7 +410,7 @@ def plot_ood(path: Path, acc: dict, ood: list[str], crits: list[str]) -> None:
         ax.grid(alpha=0.25, axis="y")
     handles = [plt.Rectangle((0, 0), 1, 1, fc="gray", hatch="//" if j else None, ec="white") for j in range(len(ood))]
     axes[0].legend(handles, ood, frameon=False, title=f"r* = {PLOT_RISK}")
-    axes[1].set_xticks(np.arange(len(crits)), crits, rotation=40, ha="right")
+    axes[-1].set_xticks(np.arange(len(crits)), crits, rotation=40, ha="right")
     for ax in axes:
         style_axes(ax)
     save(fig, path)
@@ -466,6 +492,10 @@ def summary(md: str, acc: dict, data: dict[str, dict]) -> None:
         for d in (x for x in OOD_DATASETS if x in data):
             line += f" | {d} " + " ".join(f"{mean_of(acc, ('ood_acc', d, m, PLOT_RISK, c)):.3f}" for m in MODES)
         print(line)
+    ref = sum(sum(acc.get(("refdiff", c), [])) for c in active_criteria(data))
+    total = sum(len(acc.get(("refdiff", c), [])) for c in active_criteria(data))
+    unc = sum(sum(v) for k, v in acc.items() if k[0] == "uncertified")
+    print(f"SGRSelector vs reference sgr_threshold: {int(ref)} of {total} thresholds differ; {int(unc)} uncertified (-inf).")
     print("Ensemble spread comes from the random splits only (one ensemble of the base models, one per seed).")
 
 

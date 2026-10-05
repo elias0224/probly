@@ -15,6 +15,7 @@ from matplotlib import font_manager  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from probly.selective_prediction import CoverageSelector, SGRSelector  # noqa: E402
 from sgr_experiment.metrics import apply_threshold, coverage_at_risk, risk_coverage_curve, threshold_for_risk  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
@@ -45,6 +46,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out", type=Path, default=EXPERIMENT_DIR / "results")
     p.add_argument("--n-splits", type=int, default=10)
     p.add_argument("--split-seed", type=int, default=0)
+    p.add_argument("--delta", type=float, default=0.001, help="Confidence parameter of probly's SGRSelector.")
     return p.parse_args()
 
 
@@ -123,6 +125,11 @@ def main() -> None:
     matched = {c: np.zeros((len(risks), 0)) for c in CRITERIA}
     held_risk = {c: np.zeros((len(risks), 0)) for c in CRITERIA}
     held_cov = {c: np.zeros((len(risks), 0)) for c in CRITERIA}
+    sgr_risk = {c: np.zeros((len(risks), 0)) for c in CRITERIA}
+    sgr_cov = {c: np.zeros((len(risks), 0)) for c in CRITERIA}
+    sgr_viol = {c: np.zeros((len(risks), 0)) for c in CRITERIA}
+    cs_cov = {c: np.zeros((len(PAPER), 0)) for c in CRITERIA}
+    cs_risk = {c: np.zeros((len(PAPER), 0)) for c in CRITERIA}
     for d in data:
         for perm in splits:
             sel, test = perm[:half], perm[half:]
@@ -135,6 +142,23 @@ def main() -> None:
                     rk, cv = apply_threshold(crit[test], loss[test], thr)
                     hr.append(rk)
                     hc.append(cv)
+                sr, sc, sv = [], [], []
+                for r in risks:
+                    with warnings.catch_warnings():  # uncertified: threshold -inf, accepts nothing
+                        warnings.simplefilter("ignore", UserWarning)
+                        thr = SGRSelector(r, args.delta).calibrate(crit[sel], loss[sel]).threshold
+                    rk, cv = apply_threshold(crit[test], loss[test], thr)
+                    sr.append(rk)
+                    sc.append(cv)
+                    sv.append(float(rk > r + 1e-12) if np.isfinite(rk) else 0.0)
+                cr, cc = [], []
+                for _, _, paper_cov in PAPER:
+                    thr = CoverageSelector(paper_cov).calibrate(crit[sel]).threshold
+                    rk, cv = apply_threshold(crit[test], loss[test], thr)
+                    cr.append(rk)
+                    cc.append(cv)
+                for store, vals in ((sgr_risk, sr), (sgr_cov, sc), (sgr_viol, sv), (cs_risk, cr), (cs_cov, cc)):
+                    store[c] = np.column_stack([store[c], vals])
                 matched[c] = np.column_stack([matched[c], m])
                 held_risk[c] = np.column_stack([held_risk[c], hr])
                 held_cov[c] = np.column_stack([held_cov[c], hc])
@@ -152,6 +176,18 @@ def main() -> None:
         w = csv.writer(fh)
         w.writerow(header)
         w.writerows(rows)
+    sgr_header = ["r_star"] + [f"{c}_{k}" for c in CRITERIA for k in ("sgr_risk", "sgr_coverage", "sgr_violation_share")]
+    sgr_rows = []
+    cs_header = ["paper_test_coverage", "paper_test_risk"] + [f"{c}_{k}" for c in CRITERIA for k in ("cs_coverage", "cs_risk")]
+    cs_rows = []
+    for i, (r, pr, pc) in enumerate(PAPER):
+        sgr_rows.append([f"{r:.2f}"] + [x for c in CRITERIA for x in (fmt(sgr_risk[c][i]), fmt(sgr_cov[c][i]), f"{np.mean(sgr_viol[c][i]) * 100:.0f}%")])
+        cs_rows.append([f"{pc:.4f}", f"{pr:.4f}"] + [x for c in CRITERIA for x in (fmt(cs_cov[c][i]), fmt(cs_risk[c][i]))])
+    for name, head, body in (("table_sgr.csv", sgr_header, sgr_rows), ("table_coverage.csv", cs_header, cs_rows)):
+        with (args.out / name).open("w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(head)
+            w.writerows(body)
 
     md = [
         "# Table 1 reproduction (CIFAR-10)",
@@ -166,6 +202,28 @@ def main() -> None:
         cols += [f"{c} cov@risk", f"{c} held-out risk", f"{c} held-out cov"]
     md += ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     md += ["| " + " | ".join(r) + " |" for r in rows]
+    md += [
+        "",
+        "## SGR guarantee (probly SGRSelector)",
+        "",
+        f"Threshold from the selection half with SGR (delta {args.delta}) for r*; risk, coverage and the share of splits",
+        "with test risk > r* on the test half. An uncertified selector accepts nothing (risk n/a, coverage 0).",
+        "",
+    ]
+    cols = ["r*"] + [f"{c} {k}" for c in CRITERIA for k in ("risk", "cov", "viol")]
+    md += ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
+    md += ["| " + " | ".join(r) + " |" for r in sgr_rows]
+    md += [
+        "",
+        "## Coverage target (probly CoverageSelector)",
+        "",
+        "Label-free: the threshold is the split-conformal quantile of the criterion on the selection half for the paper's",
+        "test coverage; realized coverage and risk on the test half, next to the paper's risk.",
+        "",
+    ]
+    cols = ["paper cov", "paper risk"] + [f"{c} {k}" for c in CRITERIA for k in ("cov", "risk")]
+    md += ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
+    md += ["| " + " | ".join(r) + " |" for r in cs_rows]
     md += ["", "## Base accuracy", "", f"Paper: {PAPER_ACC * 100:.2f}%", "", "| seed | base | dropout model, deterministic | dropout model, MC mean |", "|---|---|---|---|"]
     for s, d in zip(seeds, data, strict=True):
         md.append(
