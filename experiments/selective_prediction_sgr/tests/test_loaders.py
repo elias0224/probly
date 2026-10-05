@@ -33,3 +33,38 @@ def test_round_trip(tmp_path: Path) -> None:
     torch.save(mc.state_dict(), tmp_path / "dropout.pt")
     with torch.no_grad():
         assert torch.allclose(load_dropout(tmp_path / "dropout.pt")(x), mc(x))
+
+
+def test_swag_round_trip_keeps_statistics(tmp_path: Path) -> None:
+    from probly.method.swag import collect_swag  # noqa: PLC0415
+    from sgr_experiment.loaders import load_swag  # noqa: PLC0415
+    from sgr_experiment.model import to_swag  # noqa: PLC0415
+
+    model = to_swag(build_plain_vgg(), max_rank=3)
+    for _ in range(2):
+        collect_swag(model)
+        with torch.no_grad():
+            for p in model.parameters():
+                p.add_(0.01 * torch.randn_like(p))
+    torch.save(model.state_dict(), tmp_path / "swag.pt")
+    loaded = load_swag(tmp_path / "swag.pt", max_rank=3)
+    assert int(loaded.num_collected) == 2
+    assert torch.equal(loaded.mean, model.mean)
+    assert torch.equal(loaded.deviations, model.deviations)
+
+
+def test_ddu_and_vbll_round_trip(tmp_path: Path) -> None:
+    from sgr_experiment.loaders import load_ddu, load_finetune, load_vbll  # noqa: PLC0415
+    from sgr_experiment.model import to_ddu, to_vbll  # noqa: PLC0415
+
+    x = torch.randn(2, 3, 32, 32)
+    ddu_model = to_ddu(build_plain_vgg()).eval()
+    torch.save(ddu_model.state_dict(), tmp_path / "ddu.pt")
+    with torch.no_grad():
+        assert torch.allclose(load_ddu(tmp_path / "ddu.pt")(x)[0], ddu_model(x)[0])
+    vbll_model = to_vbll(build_plain_vgg()).eval()
+    torch.save(vbll_model.state_dict(), tmp_path / "vbll.pt")
+    with torch.no_grad():
+        assert torch.allclose(load_vbll(tmp_path / "vbll.pt")(x)[0], vbll_model(x)[0])
+    torch.save(build_plain_vgg().state_dict(), tmp_path / "finetune.pt")
+    assert isinstance(load_finetune(tmp_path / "finetune.pt"), nn.Sequential)

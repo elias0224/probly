@@ -7,6 +7,37 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "asdfghjkl"
+version = "0.1a4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c5/73/c81489fe1ed8b12099c8e034e8e623374016e5e6db2010c38d8f386acc2d/asdfghjkl-0.1a4.tar.gz", hash = "sha256:a934411a0ffdee6fcdccb19672196498ea6a8e55e3e67abbe67200c84b46ddee", size = 75744, upload-time = "2024-08-15T20:46:42.375Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/9a/7548968acfacb162c88dd9c2247a54f36136221ebb13d457016b28d47523/asdfghjkl-0.1a4-py3-none-any.whl", hash = "sha256:9cedec38494d7907075941d03d018d8c2b64047e6c41713a49f30e3790816c51", size = 89694, upload-time = "2024-08-15T20:46:40.62Z" },
+]
+
+[[package]]
+name = "backpack-for-pytorch"
+version = "1.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "einops" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
+    { name = "torchvision", version = "0.29.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "torchvision", version = "0.29.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
+    { name = "unfoldnd" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/e6/b6d42ce86da2ab55faeb6bbcd3da9aa6cbdb37ef40ac12ce5d81c7044cad/backpack_for_pytorch-1.7.1.tar.gz", hash = "sha256:edfe332e4b06a69073a6d857c5fd08d286c020be4d411f5c50a729f26f62a30d", size = 1202768, upload-time = "2024-11-15T16:28:22.859Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6f/bf/28caef15088118806f27fcd23c2f81fd715f9f30a92701f8ba1d931cfde1/backpack_for_pytorch-1.7.1-py3-none-any.whl", hash = "sha256:1e54e479524d2733986e8baabaa48c26c67581a0c3a3970d298c5d809db7ef7c", size = 196563, upload-time = "2024-11-15T16:28:20.523Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -158,12 +189,53 @@ nvtx = [
 ]
 
 [[package]]
+name = "curvlinops-for-pytorch"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "backpack-for-pytorch" },
+    { name = "einconv" },
+    { name = "einops" },
+    { name = "scipy" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c2/67/c46349c9de75dd3bbdabcd7fb16b890e4f7efa01d4b534e6742d2ec1bfde/curvlinops_for_pytorch-2.0.0.tar.gz", hash = "sha256:01f9925db9454fc9b0a31c7b83fc8ec2534c2eb12b7de7825a5298fc14e460e7", size = 141515, upload-time = "2024-08-15T18:52:00.432Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/82/41/6b1b26a54aca296e01903fcd5f3a6bd9487ea9dff5a2a019d8672c6243a0/curvlinops_for_pytorch-2.0.0-py3-none-any.whl", hash = "sha256:ba2b0516642b4403e70350a4b94009a5ec4ee4377e0d345d30ae03bee86c462b", size = 67169, upload-time = "2024-08-15T18:51:58.851Z" },
+]
+
+[[package]]
 name = "cycler"
 version = "0.12.1"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a9/95/a3dbbb5028f35eafb79008e7522a75244477d2838f38cbb722248dabc2a8/cycler-0.12.1.tar.gz", hash = "sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c", size = 7615, upload-time = "2023-10-07T05:32:18.335Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl", hash = "sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30", size = 8321, upload-time = "2023-10-07T05:32:16.783Z" },
+]
+
+[[package]]
+name = "einconv"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "einops" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fb/c6/dd2cb5b46cfb69e14b21b7ade654b4af8c736e6b71c8ff3e5b94b907ea80/einconv-0.1.0.tar.gz", hash = "sha256:6b103881b1268e43d581f285da4fa72b073c95f31b92575133bafed9929b6d98", size = 76717, upload-time = "2023-07-03T20:26:16.939Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/92/32dc70d59ad9fa5497a456a1d6559c8cff38e634c3967a144d42a0a0d0f9/einconv-0.1.0-py3-none-any.whl", hash = "sha256:3bca32d297ae502277dccbaa9ff190036fb9592074086d9762811a3dfc54b20c", size = 27971, upload-time = "2023-07-03T20:26:14.762Z" },
+]
+
+[[package]]
+name = "einops"
+version = "0.8.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2c/77/850bef8d72ffb9219f0b1aac23fbc1bf7d038ee6ea666f331fa273031aa2/einops-0.8.2.tar.gz", hash = "sha256:609da665570e5e265e27283aab09e7f279ade90c4f01bcfca111f3d3e13f2827", size = 56261, upload-time = "2026-01-26T04:13:17.638Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/09/f8d8f8f31e4483c10a906437b4ce31bdf3d6d417b73fe33f1a8b59e34228/einops-0.8.2-py3-none-any.whl", hash = "sha256:54058201ac7087911181bfec4af6091bb59380360f069276601256a76af08193", size = 65638, upload-time = "2026-01-26T04:13:18.546Z" },
 ]
 
 [[package]]
@@ -353,6 +425,40 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e3/9a/59a6f6ae6f938c15076be2c21b6cedea973d71bb1349ec84fa485fab82cf/kiwisolver-1.5.1-cp315-cp315t-musllinux_1_2_x86_64.whl", hash = "sha256:ab620eb663952455271ac37f9aaad86b73c969c02f11f53cea405b38e96a4300", size = 2395634, upload-time = "2026-08-28T10:28:03.977Z" },
     { url = "https://files.pythonhosted.org/packages/e9/2d/8982c1fb7926da5bb7ed60318c3665b5c3f941447271ac982960a11b8637/kiwisolver-1.5.1-cp315-cp315t-win_amd64.whl", hash = "sha256:cb6fae641357ed2f6e533c0d3c6504a4a5703621a50c89459e46051d56b61140", size = 75379, upload-time = "2026-08-28T10:28:06.307Z" },
     { url = "https://files.pythonhosted.org/packages/07/78/ba7b6dfa1708b82b373ac056928a30c545d5c1a627df9839dcec3c6c1881/kiwisolver-1.5.1-cp315-cp315t-win_arm64.whl", hash = "sha256:b390aec180a7c054919c04898835e1c77bced23ea8383eb2c570213bf25d1a86", size = 73011, upload-time = "2026-08-28T10:28:07.578Z" },
+]
+
+[[package]]
+name = "laplace-torch"
+version = "0.2.2.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "asdfghjkl" },
+    { name = "backpack-for-pytorch" },
+    { name = "curvlinops-for-pytorch" },
+    { name = "numpy" },
+    { name = "opt-einsum" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
+    { name = "torchmetrics" },
+    { name = "torchvision", version = "0.29.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "torchvision", version = "0.29.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/73/89/e970014576693a6aaa99349118511ea308ca5d3dc70cd1630b49052416f3/laplace_torch-0.2.2.2.tar.gz", hash = "sha256:7898a24b7d143bc8f23b69817767277b8d9e260682a62b4d172a58deeed6dd87", size = 93807, upload-time = "2024-11-27T11:45:46.681Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/20/f0/1b8ad3e604d09fc20f676963a3b42ddeea9fc8cc9f80c7e87f24c7afba9a/laplace_torch-0.2.2.2-py3-none-any.whl", hash = "sha256:1def878c8ac5f2a195d2801ac582a9e93a600269cde0f3cdbb257baaba3b724f", size = 77435, upload-time = "2024-11-27T11:45:44.984Z" },
+]
+
+[[package]]
+name = "lightning-utilities"
+version = "0.15.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f1/45/7fa8f56b17dc0f0a41ec70dd307ecd6787254483549843bef4c30ab5adce/lightning_utilities-0.15.3.tar.gz", hash = "sha256:792ae0204c79f6859721ac7f386c237a33b0ed06ba775009cb894e010a842033", size = 33553, upload-time = "2026-02-22T14:48:53.348Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/f4/ead6e0e37209b07c9baa3e984ccdb0348ca370b77cea3aaea8ddbb097e00/lightning_utilities-0.15.3-py3-none-any.whl", hash = "sha256:6c55f1bee70084a1cbeaa41ada96e4b3a0fea5909e844dd335bd80f5a73c5f91", size = 31906, upload-time = "2026-02-22T14:48:52.488Z" },
 ]
 
 [[package]]
@@ -752,6 +858,15 @@ wheels = [
 ]
 
 [[package]]
+name = "opt-einsum"
+version = "3.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8c/b9/2ac072041e899a52f20cf9510850ff58295003aa75525e58343591b0cbfb/opt_einsum-3.4.0.tar.gz", hash = "sha256:96ca72f1b886d148241348783498194c577fa30a8faac108586b14f1ba4473ac", size = 63004, upload-time = "2024-09-26T14:33:24.483Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl", hash = "sha256:69bb92469f86a1565195ece4ac0323943e83477171b91d24c35afe028a90d7cd", size = 71932, upload-time = "2024-09-26T14:33:23.039Z" },
+]
+
+[[package]]
 name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1098,6 +1213,8 @@ name = "selective-prediction-sgr"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "curvlinops-for-pytorch" },
+    { name = "laplace-torch" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "probly" },
@@ -1115,6 +1232,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "curvlinops-for-pytorch", specifier = ">=2.0,<3.0" },
+    { name = "laplace-torch", specifier = ">=0.2.0" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "probly", editable = "../../" },
@@ -1218,6 +1337,22 @@ wheels = [
 ]
 
 [[package]]
+name = "torchmetrics"
+version = "1.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lightning-utilities" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/81/34/39b8b749333db56c0585d7a11fa62a283c087bb1dfc897d69fb8cedbefb1/torchmetrics-1.9.0.tar.gz", hash = "sha256:a488609948600df52d3db4fcdab02e62aab2a85ef34da67037dc3e65b8512faa", size = 581765, upload-time = "2026-03-09T17:41:22.443Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/a2/c7f6ebf546f8f644edf0f999aa98ece106986a77a7b922316bf6414ff825/torchmetrics-1.9.0-py3-none-any.whl", hash = "sha256:bfdcbff3dd1d96b3374bb2496eb39f23c4b28b8a845b6a18c313688e0d2d9ca1", size = 983384, upload-time = "2026-03-09T17:41:19.756Z" },
+]
+
+[[package]]
 name = "torchvision"
 version = "0.29.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1293,4 +1428,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3306cebfbda2c520f545d36b5be2c7255cc528bb45d6/typing_extensions-4.16.0.tar.gz", hash = "sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5", size = 113555, upload-time = "2026-07-02T08:40:05.92Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl", hash = "sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8", size = 45571, upload-time = "2026-07-02T08:40:04.659Z" },
+]
+
+[[package]]
+name = "unfoldnd"
+version = "0.2.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
+    { name = "torch", version = "2.14.1+cu126", source = { registry = "https://download.pytorch.org/whl/cu126" }, marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/12/59/c7b37eb01a339900eedce92947ab43da467f910e3e18d796096dac9b6097/unfoldnd-0.2.3.tar.gz", hash = "sha256:f5b5121d05dafdd70e873ac64a3ecdadfc4c0e8840a0facc86986ede664ab188", size = 18699, upload-time = "2024-12-30T19:43:26.643Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/34/0a/2220291f3a9cafdfd52a7fc42ba012fce9e8ae3d89ee726ad27188d5d63a/unfoldNd-0.2.3-py3-none-any.whl", hash = "sha256:62e9cc35b152b916204b900a3989f3637baf7bd359fdfe32295e817e3b81229c", size = 16822, upload-time = "2024-12-30T19:43:24.82Z" },
 ]

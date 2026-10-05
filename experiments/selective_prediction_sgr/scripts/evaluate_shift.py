@@ -50,6 +50,44 @@ CRITERIA = {
     "ens_aleatoric": {"label": "Ensemble, aleatoric", "color": "#fb8c00", "ls": "--"},
     "ens_epistemic": {"label": "Ensemble, epistemic", "color": "#43a047", "ls": "--"},
 }
+# Post-training methods (``dump_methods.py``); they are added when their dumps exist for all seeds.
+_METHOD_STYLE = {
+    "finetune": ("Fine-tuned base", "#795548"),
+    "swag": ("SWAG", "#00acc1"),
+    "laplace": ("Laplace (last layer)", "#c0ca33"),
+    "gda": ("GDA", "#e91e63"),
+    "ddu": ("DDU-style", "#5e35b1"),
+    "vbll": ("VBLL", "#f4511e"),
+}
+_QUANTITY_LS = {"maxprob": "-", "total": ":", "aleatoric": "-.", "epistemic": "--", "density": "--"}
+# keys of the method npz files that become criteria (``{method}_{key}``)
+METHOD_KEYS = {
+    "finetune": ["maxprob"],
+    "swag": ["maxprob", "total", "aleatoric", "epistemic"],
+    "laplace": ["maxprob", "total", "aleatoric", "epistemic"],
+    "gda": ["density"],
+    "ddu": ["maxprob", "density"],
+    "vbll": ["maxprob", "total", "aleatoric", "epistemic"],
+}
+for _m, _keys in METHOD_KEYS.items():
+    for _k in _keys:
+        CRITERIA[f"{_m}_{_k}"] = {
+            "label": f"{_METHOD_STYLE[_m][0]}, {_k}",
+            "color": _METHOD_STYLE[_m][1],
+            "ls": _QUANTITY_LS[_k],
+        }
+CRITERIA["swa_maxprob"] = {"label": "SWA mean, 1 - max prob", "color": "#4dd0e1", "ls": "-"}
+MAIN_GROUP = [c for c in CRITERIA if c.startswith(("sr_", "mc_", "ens_"))]
+# Figures of the methods: confidence scores (1 - max prob) in one, epistemic and density scores in the other.
+FIGURE_GROUPS = {
+    "": MAIN_GROUP,
+    "_methods_maxprob": [
+        "sr_base", "mc_maxprob", "ens_maxprob", "finetune_maxprob", "swa_maxprob", "swag_maxprob", "laplace_maxprob", "ddu_maxprob", "vbll_maxprob",
+    ],
+    "_methods_uncertainty": [
+        "mc_epistemic", "ens_epistemic", "swag_epistemic", "laplace_epistemic", "vbll_epistemic", "gda_density", "ddu_density",
+    ],
+}
 ID_RISKS = [r for r, _, _ in PAPER]
 SHIFT_RISKS = [0.01, 0.03, 0.05]
 MODES = ["emp", "sgr"]
@@ -81,7 +119,7 @@ def load_dataset(runs: Path, seeds: list[int], name: str) -> dict | None:
     labels = ds[0]["labels"]
     for d in ds:
         np.testing.assert_array_equal(d["labels"], labels)
-    units: dict[str, list[tuple[np.ndarray, np.ndarray]]] = {c: [] for c in CRITERIA}
+    units: dict[str, list[tuple[np.ndarray, np.ndarray]]] = {c: [] for c in CRITERIA if c.startswith(("sr_", "mc_", "ens_"))}
     for d in ds:
         for c, key in (("sr_base", "softmax_base"), ("sr_dropout", "softmax_dropout")):
             p = d[key].astype(np.float64)
@@ -89,6 +127,19 @@ def load_dataset(runs: Path, seeds: list[int], name: str) -> dict | None:
         pred = d["mean_probs"].argmax(1)
         for c in ("mc_maxprob", "mc_total", "mc_aleatoric", "mc_epistemic", "mc_variance"):
             units[c].append((d[c].astype(np.float64), pred))
+    for m, keys in METHOD_KEYS.items():
+        mfiles = [runs / f"seed{sd}" / "shift" / m / f"{name}.npz" for sd in seeds]
+        if not all(f.exists() for f in mfiles):
+            continue
+        for f in mfiles:
+            md = np.load(f)
+            np.testing.assert_array_equal(md["labels"], labels)
+            pred = md["mean_probs"].argmax(1)
+            for k in keys:
+                units.setdefault(f"{m}_{k}", []).append((md[k].astype(np.float64), pred))
+            if m == "swag":
+                p = md["softmax_swa"].astype(np.float64)
+                units.setdefault("swa_maxprob", []).append((1 - p.max(1), p.argmax(1)))
     members = torch.from_numpy(np.stack([d["softmax_base"] for d in ds]).astype(np.float64))
     mean = members.mean(0).numpy()
     uq = decompose(member_representation(members))
@@ -113,6 +164,11 @@ def fmt(values: list[float], digits: int, mode: str, mark_above: float | None = 
     return f"{v.mean():.{digits}f} +- {v.std():.{digits}f}{star}"
 
 
+def active_criteria(data: dict[str, dict]) -> list[str]:
+    """Criteria available on the clean test set, in the order of ``CRITERIA``."""
+    return [c for c in CRITERIA if data["cifar10"]["units"].get(c)]
+
+
 def run_protocol(data: dict[str, dict], n_splits: int, split_seed: int, delta: float) -> dict[tuple, list[float]]:
     """Evaluate every criterion, unit and split; returns the list of values per result key."""
     acc: dict[tuple, list[float]] = defaultdict(list)
@@ -127,7 +183,9 @@ def run_protocol(data: dict[str, dict], n_splits: int, split_seed: int, delta: f
     rng_ood = np.random.default_rng(split_seed + 1)
     subsets = {d: [rng_ood.choice(len(data[d]["labels"]), n - half, replace=len(data[d]["labels"]) < n - half) for _ in splits] for d in ood}
 
-    for c in CRITERIA:
+    for c in active_criteria(data):
+        ood_c = [d for d in ood if data[d]["units"].get(c)]
+        shifted_c = [d for d in shifted if data[d]["units"].get(c)]
         for u, (crit, pred) in enumerate(clean["units"][c]):
             loss = (pred != labels).astype(np.float64)
             for si, perm in enumerate(splits):
@@ -135,7 +193,7 @@ def run_protocol(data: dict[str, dict], n_splits: int, split_seed: int, delta: f
                 acc["aurc", c].append(aurc(crit[test], loss[test]) * 1000)
                 acc["eaurc", c].append(e_aurc(crit[test], loss[test]) * 1000)
                 acc["acc", c].append(1 - loss[test].mean())
-                for d in ood:
+                for d in ood_c:
                     acc["auroc", d, c].append(auroc(crit[test], data[d]["units"][c][u][0]))
                 for r in sorted(set(ID_RISKS) | set(SHIFT_RISKS)):
                     thr_emp = threshold_for_risk(crit[sel], loss[sel], r)
@@ -149,7 +207,7 @@ def run_protocol(data: dict[str, dict], n_splits: int, split_seed: int, delta: f
                             acc["id", mode, r, c, "risk"].append(risk)
                             acc["id", mode, r, c, "cov"].append(cov)
                             acc["id", mode, r, c, "viol"].append(float(risk > r + EPS) if np.isfinite(risk) else 0.0)
-                        for d in ood:
+                        for d in ood_c:
                             ood_crit = data[d]["units"][c][u][0]
                             if r in SHIFT_RISKS:
                                 acc["ood_acc", d, mode, r, c].append(float((ood_crit <= thr).mean()))
@@ -159,13 +217,13 @@ def run_protocol(data: dict[str, dict], n_splits: int, split_seed: int, delta: f
                             acc["mix", d, mode, r, c, "risk"].append(risk)
                             acc["mix", d, mode, r, c, "cov"].append(cov)
                         if r in SHIFT_RISKS:
-                            for d in shifted:
+                            for d in shifted_c:
                                 s_crit, s_pred = data[d]["units"][c][u]
                                 s_loss = (s_pred != labels).astype(np.float64)
                                 risk, cov = apply_threshold(s_crit[test], s_loss[test], thr)
                                 acc["shift", d, mode, r, c, "risk"].append(risk)
                                 acc["shift", d, mode, r, c, "cov"].append(cov)
-                for d in shifted:
+                for d in shifted_c:
                     acc["shift_acc", d, c].append(1 - (data[d]["units"][c][u][1] != labels)[test].mean())
     return acc
 
@@ -205,7 +263,7 @@ def build_tables(acc: dict, data: dict[str, dict], out: Path, n_seeds: int, n_sp
     t = Tables(out)
     ood = [d for d in OOD_DATASETS if d in data]
     shifted = [d for d in SHIFT_DATASETS if d in data]
-    crits = list(CRITERIA)
+    crits = active_criteria(data)
     t.add(
         "id_aurc", "a) ID: AURC and E-AURC (x1000, lower is better) and accuracy", ["criterion"],
         [([c], [("aurc", c), ("eaurc", c), ("acc", c)]) for c in crits],
@@ -283,11 +341,12 @@ def mean_of(acc: dict, key: tuple) -> float:
     return float(v.mean()) if v.size else float("nan")
 
 
-def plot_id(path: Path, clean: dict) -> None:
-    """Mean risk-coverage curves of all criteria on the full clean test set, with the paper's points."""
+def plot_id(path: Path, clean: dict, crits: list[str]) -> None:
+    """Mean risk-coverage curves of the criteria on the full clean test set, with the paper's points."""
     grid = np.linspace(0.7, 1.0, 601)
     fig, ax = plt.subplots(figsize=(8, 5.5))
-    for c, style in CRITERIA.items():
+    for c in crits:
+        style = CRITERIA[c]
         ys = []
         for crit, pred in clean["units"][c]:
             cov, rsk = risk_coverage_curve(crit, (pred != clean["labels"]).astype(np.float64))
@@ -304,19 +363,19 @@ def plot_id(path: Path, clean: dict) -> None:
     save(fig, path)
 
 
-def plot_ood(path: Path, acc: dict, ood: list[str]) -> None:
+def plot_ood(path: Path, acc: dict, ood: list[str], crits: list[str]) -> None:
     """Share of OOD images accepted at the clean threshold for r* = 0.03 (top: emp, bottom: sgr)."""
     fig, axes = plt.subplots(2, 1, figsize=(9, 6), sharex=True, sharey=True)
     width = 0.8 / len(ood)
     for ax, mode in zip(axes, MODES, strict=True):
         for j, d in enumerate(ood):
-            vals = [np.asarray(acc[("ood_acc", d, mode, PLOT_RISK, c)], dtype=float) for c in CRITERIA]
+            vals = [np.asarray(acc[("ood_acc", d, mode, PLOT_RISK, c)], dtype=float) for c in crits]
             ax.bar(
-                np.arange(len(CRITERIA)) + (j - (len(ood) - 1) / 2) * width,
+                np.arange(len(crits)) + (j - (len(ood) - 1) / 2) * width,
                 [v.mean() for v in vals],
                 width,
                 yerr=[v.std() for v in vals],
-                color=[s["color"] for s in CRITERIA.values()],
+                color=[CRITERIA[c]["color"] for c in crits],
                 hatch="//" if j else None,
                 edgecolor="white",
                 error_kw={"lw": 0.8},
@@ -325,19 +384,20 @@ def plot_ood(path: Path, acc: dict, ood: list[str]) -> None:
         ax.grid(alpha=0.25, axis="y")
     handles = [plt.Rectangle((0, 0), 1, 1, fc="gray", hatch="//" if j else None, ec="white") for j in range(len(ood))]
     axes[0].legend(handles, ood, frameon=False, title=f"r* = {PLOT_RISK}")
-    axes[1].set_xticks(np.arange(len(CRITERIA)), list(CRITERIA), rotation=40, ha="right")
+    axes[1].set_xticks(np.arange(len(crits)), crits, rotation=40, ha="right")
     for ax in axes:
         style_axes(ax)
     save(fig, path)
 
 
-def plot_shift(path: Path, acc: dict, data: dict[str, dict]) -> None:
+def plot_shift(path: Path, acc: dict, data: dict[str, dict], crits: list[str]) -> None:
     """Risk at the emp threshold for r* = 0.03 versus corruption severity (0 is the clean test half)."""
     corruptions = [c for c in CORRUPTIONS if any(corrupted_name(c, s) in data for s in SEVERITIES)]
     fig, axes = plt.subplots(1, len(corruptions), figsize=(4 * len(corruptions), 4), sharey=True, squeeze=False)
     for ax, corruption in zip(axes[0], corruptions, strict=True):
         sevs = [s for s in SEVERITIES if corrupted_name(corruption, s) in data]
-        for c, style in CRITERIA.items():
+        for c in crits:
+            style = CRITERIA[c]
             ys = [mean_of(acc, ("id", "emp", PLOT_RISK, c, "risk"))]
             ys += [mean_of(acc, ("shift", corrupted_name(corruption, s), "emp", PLOT_RISK, c, "risk")) for s in sevs]
             ax.plot([0, *sevs], ys, color=style["color"], ls=style["ls"], marker="o", ms=3, lw=1.4, label=style["label"])
@@ -374,15 +434,22 @@ def main() -> None:
     setup_fonts()
     acc = run_protocol(data, args.n_splits, args.split_seed, args.delta)
     md = build_tables(acc, data, args.out, len(seeds), args.n_splits)
-    plot_id(args.out / "id_risk_coverage.png", data["cifar10"])
-    written = ["table.md", "id_risk_coverage.png"]
+    written = ["table.md"]
     ood = [d for d in OOD_DATASETS if d in data]
-    if ood:
-        plot_ood(args.out / "ood_acceptance.png", acc, ood)
-        written.append("ood_acceptance.png")
-    if any(d in data for d in SHIFT_DATASETS):
-        plot_shift(args.out / "shift_risk.png", acc, data)
-        written.append("shift_risk.png")
+    available = active_criteria(data)
+    for suffix, group in FIGURE_GROUPS.items():
+        crits = [c for c in group if c in available]
+        if not crits or (suffix and not any(c.startswith(tuple(METHOD_KEYS)) or c == "swa_maxprob" for c in crits)):
+            continue
+        plot_id(args.out / f"id_risk_coverage{suffix}.png", data["cifar10"], crits)
+        written.append(f"id_risk_coverage{suffix}.png")
+        ood_crits = [c for c in crits if all(("ood_acc", d, "emp", PLOT_RISK, c) in acc for d in ood)]
+        if ood and ood_crits:
+            plot_ood(args.out / f"ood_acceptance{suffix}.png", acc, ood, ood_crits)
+            written.append(f"ood_acceptance{suffix}.png")
+        if any(d in data for d in SHIFT_DATASETS):
+            plot_shift(args.out / f"shift_risk{suffix}.png", acc, data, crits)
+            written.append(f"shift_risk{suffix}.png")
     summary(md, acc, data)
     print(f"Wrote {', '.join(written)} and the csv tables to {args.out}")
 
@@ -392,8 +459,8 @@ def summary(md: str, acc: dict, data: dict[str, dict]) -> None:
     section = md.split("## ")[1]
     print("## " + section)
     print(f"r* = {PLOT_RISK}, test-half coverage / violation share (emp, sgr) and OOD accepted (emp, sgr):")
-    for c in CRITERIA:
-        line = f"{c:14s}"
+    for c in active_criteria(data):
+        line = f"{c:16s}"
         for m in MODES:
             line += f" {m} cov {mean_of(acc, ('id', m, PLOT_RISK, c, 'cov')):.3f} viol {mean_of(acc, ('id', m, PLOT_RISK, c, 'viol')) * 100:3.0f}%"
         for d in (x for x in OOD_DATASETS if x in data):

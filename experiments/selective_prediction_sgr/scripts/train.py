@@ -1,6 +1,9 @@
-"""Train the VGG-16 on CIFAR-10 in two stages (each resumable).
+"""Train the VGG-16 on CIFAR-10 in stages (each resumable).
 
-Stage "base" trains the plain VGG; stage "dropout" applies probly's MC dropout to the trained base and fine-tunes.
+Stage "base" trains the plain VGG. All other stages start from the trained ``base.pt`` and fine-tune it: "dropout"
+applies probly's MC dropout, "finetune" keeps the plain model (control for the extra training), "swag" wraps it in
+probly's SWAG and collects weight snapshots, "ddu" applies DDU (spectral normalization, the density head is fitted
+later), "vbll" replaces the last Linear layer by a variational Bayesian last layer.
 """
 
 from __future__ import annotations
@@ -16,35 +19,64 @@ import numpy as np
 import torch
 from torch import nn
 
+from probly.losses import vbll_loss
+from probly.method.swag import collect_swag
+from probly.method.vbll import find_vbll_layer
 from sgr_experiment.data import load_cifar10, normalize, train_batches
 from sgr_experiment.loaders import load_base
-from sgr_experiment.model import build_plain_vgg, to_mc_dropout
+from sgr_experiment.model import build_plain_vgg, to_ddu, to_mc_dropout, to_swag, to_vbll
 from sgr_experiment.utils import EXPERIMENT_DIR, get_device, run_dir, seed_everything
+
+
+# (epochs, lr, lr step size in epochs) per stage; swag keeps the lr constant.
+DEFAULTS = {
+    "base": (250, 0.1, 25),
+    "dropout": (50, 0.01, 10),
+    "finetune": (50, 0.01, 10),
+    "swag": (20, 0.01, 10**6),
+    "ddu": (20, 0.01, 10),
+    "vbll": (20, 0.01, 10),
+}
+KL_WEIGHT = 1.0 / 50000  # VBLL: 1 / training set size
 
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--stage", choices=["base", "dropout"], default="base")
-    p.add_argument("--epochs", type=int, default=None, help="Default: 250 (base) or 50 (dropout).")
+    p.add_argument("--stage", choices=list(DEFAULTS), default="base")
+    p.add_argument("--epochs", type=int, default=None, help="Default: 250 (base), 50 (dropout, finetune), 20 (others).")
     p.add_argument("--out", type=Path, default=EXPERIMENT_DIR / "runs")
     p.add_argument("--data-dir", type=Path, default=EXPERIMENT_DIR / "data")
     p.add_argument("--batch-size", type=int, default=128)
-    p.add_argument("--lr", type=float, default=None, help="Default: 0.1 (base) or 0.01 (dropout).")
-    p.add_argument("--step-size", type=int, default=None, help="Halve the lr every this many epochs. Default: 25 / 10.")
+    p.add_argument("--lr", type=float, default=None, help="Default: 0.1 (base) or 0.01 (others).")
+    p.add_argument("--step-size", type=int, default=None, help="Halve the lr every this many epochs. Default: 25 (base), constant (swag), else 10.")
     p.add_argument("--p", type=float, default=0.5, help="Dropout probability of the inserted layers (stage dropout).")
+    p.add_argument("--swag-start", type=int, default=5, help="First epoch (1-based) after which SWAG collects a snapshot.")
+    p.add_argument("--swag-max-rank", type=int, default=20)
+    p.add_argument("--swag-scale", type=float, default=0.5)
+    p.add_argument("--sn-coeff", type=float, default=3.0, help="Spectral normalization coefficient (stage ddu).")
+    p.add_argument("--vbll-parameterization", default="dense", choices=["diagonal", "dense", "lowrank"])
     p.add_argument("--subset", type=int, default=None, help="Train on a random subset of this many instances.")
     return p.parse_args()
 
 
+def logits_of(stage: str, model: nn.Module, x: torch.Tensor) -> torch.Tensor:
+    """Logits of a stage's model (DDU and VBLL models do not return plain logits)."""
+    if stage == "ddu":
+        return model.classification_head(model.encoder(x))
+    if stage == "vbll":
+        return model(x)[0]
+    return model(x)
+
+
 @torch.no_grad()
-def evaluate(model: nn.Module, x_test: torch.Tensor, y_test: torch.Tensor, batch_size: int = 1000) -> float:
+def evaluate(stage: str, model: nn.Module, x_test: torch.Tensor, y_test: torch.Tensor, batch_size: int = 1000) -> float:
     """Deterministic eval-mode accuracy on normalized test tensors that live on the model's device."""
     model.eval()
     correct = 0
     for start in range(0, len(y_test), batch_size):
-        logits = model(x_test[start : start + batch_size])
+        logits = logits_of(stage, model, x_test[start : start + batch_size])
         correct += (logits.argmax(-1) == y_test[start : start + batch_size]).sum().item()
     return correct / len(y_test)
 
@@ -52,12 +84,13 @@ def evaluate(model: nn.Module, x_test: torch.Tensor, y_test: torch.Tensor, batch
 def main() -> None:
     """Train, checkpointing every epoch and resuming from ``last.pt`` if present."""
     args = parse_args()
-    defaults = {"base": (250, 0.1, 25), "dropout": (50, 0.01, 10)}[args.stage]
+    defaults = DEFAULTS[args.stage]
     args.epochs = defaults[0] if args.epochs is None else args.epochs
     args.lr = defaults[1] if args.lr is None else args.lr
     args.step_size = defaults[2] if args.step_size is None else args.step_size
     device = get_device()
-    use_amp = device.type == "cuda"
+    # DDU (power iteration) and VBLL (Cholesky based loss) are kept in fp32.
+    use_amp = device.type == "cuda" and args.stage not in ("ddu", "vbll")
     out = run_dir(args.out, args.seed)
     out.mkdir(parents=True, exist_ok=True)
     ckpt_path = out / f"last_{args.stage}.pt"
@@ -74,10 +107,26 @@ def main() -> None:
         if not base_path.exists():
             msg = f"{base_path} not found; train stage base first."
             raise SystemExit(msg)
-        model = to_mc_dropout(load_base(base_path), p=args.p)
+        base = load_base(base_path)
+        model = {
+            "dropout": lambda: to_mc_dropout(base, p=args.p),
+            "finetune": lambda: base,
+            "swag": lambda: to_swag(base, max_rank=args.swag_max_rank, scale=args.swag_scale),
+            "ddu": lambda: to_ddu(base, sn_coeff=args.sn_coeff),
+            "vbll": lambda: to_vbll(base, parameterization=args.vbll_parameterization),
+        }[args.stage]()
     # No channels-last: it was 4-5x slower for this network on an RTX 2070 Super (see scripts/bench.py).
     model = model.to(device)
-    opt = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    vbll_features: dict[str, torch.Tensor] = {}
+    if args.stage == "vbll":
+        vbll_layer = find_vbll_layer(model)
+        vbll_layer.register_forward_pre_hook(lambda _m, inputs: vbll_features.update(x=inputs[0]))
+        # No weight decay on the variational parameters: it would shrink the posterior covariance parameters.
+        rest = [p for p in model.parameters() if all(p is not q for q in vbll_layer.parameters())]
+        groups = [{"params": rest}, {"params": list(vbll_layer.parameters()), "weight_decay": 0.0}]
+    else:
+        groups = [{"params": list(model.parameters())}]
+    opt = torch.optim.SGD(groups, lr=args.lr, momentum=0.9, weight_decay=5e-4)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=args.step_size, gamma=0.5)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
@@ -102,7 +151,7 @@ def main() -> None:
     x_test, y_test = load_cifar10(args.data_dir, train=False, device=device)
     x_test = normalize(x_test)
     loss_fn = nn.CrossEntropyLoss()
-    acc = evaluate(model, x_test, y_test) if start_epoch >= args.epochs else float("nan")
+    acc = evaluate(args.stage, model, x_test, y_test) if start_epoch >= args.epochs else float("nan")
     new_log = not log_path.exists() or start_epoch == 0
     with log_path.open("w" if new_log else "a", newline="") as fh:
         writer = csv.writer(fh)
@@ -120,7 +169,11 @@ def main() -> None:
             for x, y in train_batches(x_train, y_train, batch_size=args.batch_size, generator=gen):
                 opt.zero_grad(set_to_none=True)
                 with torch.autocast(device.type, enabled=use_amp):
-                    loss = loss_fn(model(x), y)
+                    if args.stage == "vbll":
+                        model(x)
+                        loss = vbll_loss(vbll_layer, vbll_features["x"], y, KL_WEIGHT)
+                    else:
+                        loss = loss_fn(logits_of(args.stage, model, x), y)
                 scaler.scale(loss).backward()
                 scaler.step(opt)
                 scaler.update()
@@ -128,7 +181,9 @@ def main() -> None:
                 n += y.numel()
             lr = opt.param_groups[0]["lr"]
             sched.step()
-            acc = evaluate(model, x_test, y_test)
+            if args.stage == "swag" and (epoch + 1 >= args.swag_start or epoch + 1 == args.epochs):  # always the last
+                collect_swag(model)
+            acc = evaluate(args.stage, model, x_test, y_test)
             secs = time.time() - t0
             train_loss = total_loss.item() / n
             writer.writerow([epoch + 1, f"{train_loss:.5f}", f"{acc:.5f}", f"{lr:.6f}", f"{secs:.1f}"])
@@ -167,6 +222,11 @@ def main() -> None:
         "weight_decay": 5e-4,
         "batch_size": args.batch_size,
         "dropout_p": args.p if args.stage == "dropout" else None,
+        "swag": {"start": args.swag_start, "max_rank": args.swag_max_rank, "scale": args.swag_scale}
+        if args.stage == "swag"
+        else None,
+        "sn_coeff": args.sn_coeff if args.stage == "ddu" else None,
+        "vbll_parameterization": args.vbll_parameterization if args.stage == "vbll" else None,
         "subset": args.subset,
         "test_acc": acc,
         "git_commit": commit,

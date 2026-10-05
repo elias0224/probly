@@ -10,6 +10,8 @@ dependencies = [
   "numpy",
   "matplotlib",
   "scipy>=1.18.1",
+  "laplace-torch>=0.2.0",
+  "curvlinops-for-pytorch>=2.0,<3.0",
 ]
 
 [dependency-groups]

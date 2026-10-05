@@ -120,6 +120,56 @@ curl.exe -L -k --retry 10 --retry-all-errors -C - -o data\test_32x32.mat http://
 
 Expected MD5: `eb9058c3a382ffc7106e4002c42a8d85` (CIFAR-100 archive), `eb5a983be6a315427106f1b164d9cef3` (SVHN test).
 
+## Post-training methods
+
+Further methods built on each seed's `base.pt` with probly's public API, compared with the earlier criteria in
+`evaluate_shift.py` (criteria `{method}_{quantity}` in all tables and plots; methods without dumps are skipped).
+
+| method | what it does | budget |
+|---|---|---|
+| `finetune` | control: the plain base model fine-tuned like the dropout stage, criterion 1 - max softmax | 50 epochs, lr 0.01, x0.5 every 10 |
+| `swag` | `swag(base, max_rank=20, scale=0.5)`, `collect_swag` once per epoch from epoch 5 on (the last epoch is always collected), 30 samples via the probly representer; the SWA-mean deterministic softmax is stored as well (`swa_maxprob`) | 20 epochs, constant lr 0.01, momentum 0.9, wd 5e-4 |
+| `laplace` | `laplace.Laplace(model, "classification", subset_of_weights="last_layer", hessian_structure="kron")`, fitted on the un-augmented training set, prior precision optimized by marglik, 100 samples via the probly representer | none |
+| `gda` | probly's `GaussianMixtureHead` fitted on the 512-dim features in front of the last Linear layer of the base model; criterion = `negative_log_density`, predictions stay the base softmax. A density/OOD score, not a confidence | none |
+| `ddu` | `ddu(base, sn_coeff=3.0)` fine-tuned, then the density head is fitted on training features; criteria 1 - max softmax and negative log density | 20 epochs, lr 0.01, x0.5 every 10, fp32 |
+| `vbll` | `vbll(base, parameterization="dense")` (a fresh dense variational last layer), trained with `vbll_loss`, kl_weight 1/50000, 100 samples via the probly representer | 20 epochs, whole network SGD lr 0.01 (no weight decay on the VBLL layer), fp32 |
+
+Criteria: `maxprob` (1 - max mean probability), and for the sampling methods `total`, `aleatoric`, `epistemic` from
+`probly.quantification.quantify`; `density` for `gda` and `ddu`.
+
+Notes:
+
+- The VGG has no residual connections, which the DDU paper relies on, so `ddu` is DDU-style only (probly warns about it).
+- VBLL: the whole-network SGD run was checked for stability on a small subset (finite, decreasing loss, accuracy kept);
+  head-only Adam was not needed.
+- Samplers force every `nn.Dropout` into train mode. For SWAG the dropout `p` is therefore set to 0 at inference
+  (`model.disable_dropout`), so the samples carry only the SWAG randomness.
+- SWAG and BatchNorm: sampled weights do not match the BatchNorm running statistics, and probly does not recompute them.
+  `--swag-bn-update per_sample` (dump_methods.py) does it through a forward pre-hook on the wrapped model: for every
+  weight sample the BN statistics are recomputed on a fixed 5k training subset (`--swag-bn-samples`). That makes every
+  sampled forward pass cost (batch + 5k) images instead of batch, so use a large `--batch-size` (e.g. 2000) with it.
+  The default is `none`.
+- `swag.pt` stores the weights and the SWAG statistics (about 1.4 GB per seed, `last_swag.pt` the same again).
+- Laplace and the density heads are refitted on the training set whenever `dump_methods.py` has something left to
+  dump for that method and seed (a few seconds to a minute), instead of being saved.
+
+```powershell
+uv run python scripts/train.py --stage finetune --seed 0 --out runs      # also: swag, ddu, vbll
+uv run python scripts/dump_methods.py                                   # all methods, all seeds, resumable
+uv run python scripts/evaluate_shift.py                                 # needs dump_shift.py first
+uv run python scripts/run_all.py --methods                              # everything above for seeds 0..4
+```
+
+`dump_methods.py` writes `runs/seed{S}/shift/{method}/{dataset}.npz` (labels, `mean_probs`, the criteria). The
+evaluation adds figures per group: `*_methods_maxprob.png` (confidence scores) and `*_methods_uncertainty.png`
+(epistemic and density scores) for the ID risk-coverage curves, the OOD acceptance and the shift risk.
+
+Runtime estimate (RTX 2070 Super, about 9 s per training epoch, about 15k img/s per forward pass): training takes about
+(50 + 20 + 20 + 20) x 9 s = 16.5 min per seed, 1.4 h for 5 seeds. Dumping 156k images per seed: finetune, gda, ddu
+(one forward pass each) about 10 s per method; laplace and vbll (one pass of the network, 100 cheap last-layer
+samples) about 15 s each plus the fit (about a minute for Laplace); swag 30 forward passes, about 5 min (about 10 min with
+`--swag-bn-update per_sample`). Roughly 10 to 15 min per seed, 1 h for all seeds. These are estimates, not measurements.
+
 ## Reusing the trained models
 
 ```python

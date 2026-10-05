@@ -38,3 +38,23 @@ def predicted_class_variance(probs: torch.Tensor) -> torch.Tensor:
     pred = probs.mean(0).argmax(-1)
     pred_probs = probs.gather(-1, pred.expand(probs.shape[0], -1).unsqueeze(-1)).squeeze(-1)
     return pred_probs.var(0, unbiased=False)
+
+
+def sample_probabilities(representation: Representation) -> torch.Tensor:
+    """Sample probabilities of a representation as ``(samples, n, classes)``, whatever its sample axis is."""
+    probs = representation.tensor.probabilities  # ty: ignore[unresolved-attribute]
+    return torch.movedim(probs, representation.sample_dim, 0)  # ty: ignore[unresolved-attribute]
+
+
+def summarize_samples(representation: Representation) -> dict[str, np.ndarray]:
+    """Mean probabilities and the criteria ``maxprob``, ``total``, ``aleatoric``, ``epistemic`` as float32 arrays.
+
+    ``maxprob`` is 1 - max mean probability; the three entropies come from probly's ``quantify``.
+    """
+    mean = sample_probabilities(representation).detach().float().mean(0)
+    out = {
+        "mean_probs": mean.cpu().numpy(),
+        "maxprob": (1 - mean.max(-1).values).cpu().numpy(),
+    }
+    out.update(decompose(representation))
+    return {k: v.astype(np.float32) for k, v in out.items()}

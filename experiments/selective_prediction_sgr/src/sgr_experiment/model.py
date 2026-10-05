@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from torch import nn
 
+from probly.method.ddu import ddu
+from probly.method.swag import swag
+from probly.method.vbll import vbll
 from probly.transformation import dropout
 
 # 0 stands for max pooling, other entries are the number of output channels of a 3x3 convolution.
@@ -56,6 +59,33 @@ def to_mc_dropout(plain: nn.Module, p: float = 0.5) -> nn.Module:
         The transformed model.
     """
     return dropout(plain, p=p, predictor_type="logit_classifier")
+
+
+def to_swag(plain: nn.Module, max_rank: int = 20, scale: float = 0.5) -> nn.Module:
+    """Wrap the plain model in probly's SWAG predictor (a copy of the model plus the posterior statistics)."""
+    return swag(plain, max_rank=max_rank, scale=scale, predictor_type="logit_classifier")
+
+
+def to_ddu(plain: nn.Module, sn_coeff: float = 3.0) -> nn.Module:
+    """Apply probly's DDU transformation (spectral normalization, encoder, classification and density head)."""
+    return ddu(plain, sn_coeff=sn_coeff, predictor_type="logit_classifier")
+
+
+def to_vbll(plain: nn.Module, parameterization: str = "dense") -> nn.Module:
+    """Replace the last Linear layer by a variational Bayesian last layer (a fresh, untrained one)."""
+    return vbll(plain, parameterization=parameterization)
+
+
+def disable_dropout(model: nn.Module) -> nn.Module:
+    """Set ``p = 0`` on every ``nn.Dropout``, in place.
+
+    probly's samplers force all ``nn.Dropout`` layers into train mode, which would add the dropout noise of the
+    conv blocks to the samples of SWAG; with ``p = 0`` only the method's own randomness remains.
+    """
+    for m in model.modules():
+        if isinstance(m, nn.Dropout):
+            m.p = 0.0
+    return model
 
 
 def build_model(num_classes: int = 10, p: float = 0.5) -> nn.Module:

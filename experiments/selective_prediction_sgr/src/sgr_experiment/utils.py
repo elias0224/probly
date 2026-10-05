@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import random
 
@@ -12,7 +13,9 @@ EXPERIMENT_DIR = Path(__file__).resolve().parents[2]
 
 
 def get_device() -> torch.device:
-    """Select the best available device in the order cuda, mps, cpu."""
+    """Select the best available device in the order cuda, mps, cpu; the environment variable SGR_DEVICE overrides it."""
+    if os.environ.get("SGR_DEVICE"):
+        return torch.device(os.environ["SGR_DEVICE"])
     if torch.cuda.is_available():
         return torch.device("cuda")
     if torch.backends.mps.is_available():

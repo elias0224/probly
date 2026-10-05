@@ -1,4 +1,4 @@
-"""Train, dump and evaluate all seeds (``--shift`` adds the distribution shift stages); finished steps are skipped."""
+"""Train, dump and evaluate all seeds (``--shift`` adds the distribution shift stages, ``--methods`` the post-training methods); finished steps are skipped."""
 
 from __future__ import annotations
 
@@ -34,6 +34,14 @@ def main() -> None:
     p.add_argument("--subset", type=int, default=None)
     p.add_argument("--evaluate", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--shift", action="store_true", help="After the other stages: dump_shift.py, then evaluate_shift.py.")
+    p.add_argument(
+        "--methods",
+        action="store_true",
+        help="Also train finetune, swag, ddu and vbll, dump them and the post-hoc methods (dump_shift.py, dump_methods.py), "
+        "then run evaluate_shift.py.",
+    )
+    p.add_argument("--datasets", nargs="+", default=None, help="Restrict the shift and method dumps to these datasets.")
+    p.add_argument("--method-epochs", type=int, default=None, help="Override the epochs of the method stages (smoke tests).")
     a = p.parse_args()
 
     for seed in a.seeds:
@@ -49,8 +57,19 @@ def main() -> None:
             run("dump.py", "--seed", seed, "--runs", a.runs, "--data-dir", a.data_dir, "--num-samples", a.num_samples)
     if a.evaluate:
         run("evaluate.py", "--runs", a.runs, "--out", a.out, "--n-splits", a.n_splits)
-    if a.shift:
+    if a.methods:
         extra = ["--subset", a.subset] if a.subset else []
+        extra_dump = [*extra, *(["--datasets", *a.datasets] if a.datasets else [])]
+        epochs = ["--epochs", a.method_epochs] if a.method_epochs else []
+        for seed in a.seeds:
+            for stage in ("finetune", "swag", "ddu", "vbll"):
+                run("train.py", "--stage", stage, "--seed", seed, "--out", a.runs, "--data-dir", a.data_dir, *epochs, *extra)
+        run("dump_shift.py", "--seeds", *a.seeds, "--runs", a.runs, "--data-dir", a.data_dir, "--num-samples", a.num_samples, *extra_dump)
+        run("dump_methods.py", "--seeds", *a.seeds, "--runs", a.runs, "--data-dir", a.data_dir, "--num-samples", a.num_samples, *extra_dump)
+        run("evaluate_shift.py", "--runs", a.runs, "--out", a.out / "shift", "--n-splits", a.n_splits)
+    elif a.shift:
+        extra = ["--subset", a.subset] if a.subset else []
+        extra += ["--datasets", *a.datasets] if a.datasets else []
         run("dump_shift.py", "--seeds", *a.seeds, "--runs", a.runs, "--data-dir", a.data_dir, "--num-samples", a.num_samples, *extra)
         run("evaluate_shift.py", "--runs", a.runs, "--out", a.out / "shift", "--n-splits", a.n_splits)
 
