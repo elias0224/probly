@@ -33,8 +33,13 @@ Artifacts per seed in `runs/seed{S}/`:
 
 ## Run everything on Windows (RTX 2070 Super)
 
+Requirements: `git`, `uv` (`powershell -c "irm https://astral.sh/uv/install.ps1 | iex"`) and an NVIDIA driver that
+supports CUDA 12.6 (version 560 or newer, check with `nvidia-smi`). The branch lives on the fork:
+
 ```powershell
-git pull
+git remote add fork https://github.com/elias0224/probly.git   # once, if the remote does not exist yet
+git fetch fork
+git switch sgr-benchmark
 cd experiments/selective_prediction_sgr
 uv sync -p 3.13
 uv run python scripts/run_all.py
