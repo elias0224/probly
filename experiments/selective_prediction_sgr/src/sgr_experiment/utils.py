@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import random
 
@@ -19,11 +18,6 @@ def get_device() -> torch.device:
     if torch.backends.mps.is_available():
         return torch.device("mps")
     return torch.device("cpu")
-
-
-def default_workers() -> int:
-    """Default number of DataLoader workers: min(8, number of CPUs)."""
-    return min(8, os.cpu_count() or 1)
 
 
 def seed_everything(seed: int) -> None:

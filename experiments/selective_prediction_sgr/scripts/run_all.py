@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from sgr_experiment.utils import EXPERIMENT_DIR, default_workers, run_dir
+from sgr_experiment.utils import EXPERIMENT_DIR, run_dir
 
 SCRIPTS = Path(__file__).resolve().parent
 
@@ -31,7 +31,6 @@ def main() -> None:
     p.add_argument("--out", type=Path, default=EXPERIMENT_DIR / "results")
     p.add_argument("--num-samples", type=int, default=100)
     p.add_argument("--n-splits", type=int, default=10)
-    p.add_argument("--workers", type=int, default=default_workers())
     p.add_argument("--subset", type=int, default=None)
     p.add_argument("--evaluate", action=argparse.BooleanOptionalAction, default=True)
     a = p.parse_args()
@@ -39,7 +38,7 @@ def main() -> None:
     for seed in a.seeds:
         rd = run_dir(a.runs, seed)
         extra = ["--subset", a.subset] if a.subset else []
-        common = ["--seed", seed, "--out", a.runs, "--data-dir", a.data_dir, "--workers", a.workers, *extra]
+        common = ["--seed", seed, "--out", a.runs, "--data-dir", a.data_dir, *extra]
         # train.py skips a stage whose final weights exist, and resumes an interrupted one from its checkpoint.
         run("train.py", "--stage", "base", "--epochs", a.epochs, *common)
         run("train.py", "--stage", "dropout", "--epochs", a.finetune_epochs, "--lr", a.finetune_lr, *common)

@@ -12,13 +12,14 @@ from pathlib import Path
 import subprocess
 import time
 
+import numpy as np
 import torch
 from torch import nn
 
-from sgr_experiment.data import make_loader
+from sgr_experiment.data import load_cifar10, normalize, train_batches
 from sgr_experiment.loaders import load_base
 from sgr_experiment.model import build_plain_vgg, to_mc_dropout
-from sgr_experiment.utils import EXPERIMENT_DIR, default_workers, get_device, run_dir, seed_everything
+from sgr_experiment.utils import EXPERIMENT_DIR, get_device, run_dir, seed_everything
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,21 +34,19 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--lr", type=float, default=None, help="Default: 0.1 (base) or 0.01 (dropout).")
     p.add_argument("--step-size", type=int, default=None, help="Halve the lr every this many epochs. Default: 25 / 10.")
     p.add_argument("--p", type=float, default=0.5, help="Dropout probability of the inserted layers (stage dropout).")
-    p.add_argument("--workers", type=int, default=default_workers())
     p.add_argument("--subset", type=int, default=None, help="Train on a random subset of this many instances.")
     return p.parse_args()
 
 
 @torch.no_grad()
-def evaluate(model: nn.Module, loader: torch.utils.data.DataLoader, device: torch.device) -> float:
-    """Deterministic eval-mode accuracy."""
+def evaluate(model: nn.Module, x_test: torch.Tensor, y_test: torch.Tensor, batch_size: int = 1000) -> float:
+    """Deterministic eval-mode accuracy on normalized test tensors that live on the model's device."""
     model.eval()
-    correct = total = 0
-    for x, y in loader:
-        x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)  # noqa: PLW2901
-        correct += (model(x).argmax(-1) == y).sum().item()
-        total += y.numel()
-    return correct / total
+    correct = 0
+    for start in range(0, len(y_test), batch_size):
+        logits = model(x_test[start : start + batch_size])
+        correct += (logits.argmax(-1) == y_test[start : start + batch_size]).sum().item()
+    return correct / len(y_test)
 
 
 def main() -> None:
@@ -59,7 +58,6 @@ def main() -> None:
     args.step_size = defaults[2] if args.step_size is None else args.step_size
     device = get_device()
     use_amp = device.type == "cuda"
-    pin = device.type == "cuda"
     out = run_dir(args.out, args.seed)
     out.mkdir(parents=True, exist_ok=True)
     ckpt_path = out / f"last_{args.stage}.pt"
@@ -78,6 +76,9 @@ def main() -> None:
             raise SystemExit(msg)
         model = to_mc_dropout(load_base(base_path), p=args.p)
     model = model.to(device)
+    # Channels-last lets the AMP convolutions use the tensor cores on CUDA.
+    memory_format = torch.channels_last if device.type == "cuda" else torch.contiguous_format
+    model = model.to(memory_format=memory_format)
     opt = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=args.step_size, gamma=0.5)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
@@ -95,15 +96,15 @@ def main() -> None:
         print(f"Seed {args.seed} stage {args.stage} already trained for {start_epoch} epochs, nothing to do.")
         return
 
-    train_loader = make_loader(
-        args.data_dir, train=True, batch_size=args.batch_size, workers=args.workers, pin_memory=pin,
-        subset=args.subset, seed=args.seed,
-    )
-    test_loader = make_loader(
-        args.data_dir, train=False, batch_size=500, workers=min(2, args.workers), pin_memory=pin,
-    )
+    # The whole dataset lives on the device and is augmented there, so no DataLoader workers are needed.
+    x_train, y_train = load_cifar10(args.data_dir, train=True, device=device)
+    if args.subset is not None and args.subset < len(y_train):
+        idx = torch.from_numpy(np.random.default_rng(args.seed).permutation(len(y_train))[: args.subset]).to(device)
+        x_train, y_train = x_train[idx], y_train[idx]
+    x_test, y_test = load_cifar10(args.data_dir, train=False, device=device)
+    x_test = normalize(x_test).contiguous(memory_format=memory_format)
     loss_fn = nn.CrossEntropyLoss()
-    acc = evaluate(model, test_loader, device) if start_epoch >= args.epochs else float("nan")
+    acc = evaluate(model, x_test, y_test) if start_epoch >= args.epochs else float("nan")
     new_log = not log_path.exists() or start_epoch == 0
     with log_path.open("w" if new_log else "a", newline="") as fh:
         writer = csv.writer(fh)
@@ -111,27 +112,28 @@ def main() -> None:
             writer.writerow(["epoch", "train_loss", "test_acc", "lr", "seconds"])
         for epoch in range(start_epoch, args.epochs):
             t0 = time.time()
-            # Reseed per epoch (shuffling order and dropout masks). Persistent workers keep their own augmentation RNG
-            # state, so a resumed run is statistically equivalent but not bit-identical to an uninterrupted one.
+            # Reseed per epoch (shuffling, augmentation and dropout masks), so a resumed run continues like an
+            # uninterrupted one up to nondeterminism of the GPU kernels.
             torch.manual_seed(args.seed * 100003 + epoch)
+            gen = torch.Generator(device=device).manual_seed(args.seed * 100003 + epoch)
             model.train()
-            total_loss = 0.0
+            total_loss = torch.zeros((), device=device)
             n = 0
-            for x, y in train_loader:
-                x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)  # noqa: PLW2901
+            for x, y in train_batches(x_train, y_train, batch_size=args.batch_size, generator=gen):
+                x = x.contiguous(memory_format=memory_format)  # noqa: PLW2901
                 opt.zero_grad(set_to_none=True)
                 with torch.autocast(device.type, enabled=use_amp):
                     loss = loss_fn(model(x), y)
                 scaler.scale(loss).backward()
                 scaler.step(opt)
                 scaler.update()
-                total_loss += loss.item() * y.numel()
+                total_loss += loss.detach().float() * y.numel()
                 n += y.numel()
             lr = opt.param_groups[0]["lr"]
             sched.step()
-            acc = evaluate(model, test_loader, device)
+            acc = evaluate(model, x_test, y_test)
             secs = time.time() - t0
-            train_loss = total_loss / n
+            train_loss = total_loss.item() / n
             writer.writerow([epoch + 1, f"{train_loss:.5f}", f"{acc:.5f}", f"{lr:.6f}", f"{secs:.1f}"])
             fh.flush()
             print(f"seed {args.seed} epoch {epoch + 1}/{args.epochs} loss {train_loss:.4f} acc {acc:.4f} ({secs:.1f}s)")
