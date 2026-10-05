@@ -22,7 +22,12 @@ from probly.representation.distribution import (  # noqa: E402
 )
 from probly.representer import representer  # noqa: E402
 from probly.representer.sampler import Sampler  # noqa: E402
-from probly.selective_prediction import SelectivePredictor, ThresholdSelector  # noqa: E402
+from probly.selective_prediction import (  # noqa: E402
+    CoverageSelector,
+    SelectivePredictor,
+    SGRSelector,
+    ThresholdSelector,
+)
 from probly.transformation import dropout, ensemble  # noqa: E402
 from probly.transformation.ensemble import EnsemblePredictor  # noqa: E402
 
@@ -311,3 +316,59 @@ def test_non_default_decider_on_credal_model() -> None:
 
     assert isinstance(result.decision, CategoricalDistribution)
     torch.testing.assert_close(result.decision.probabilities, expected.probabilities)
+
+
+@pytest.mark.parametrize("dtype", [torch.float64, torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize(("n", "coverage"), [(19, 0.9), (50, 0.3), (99, 0.5)])
+def test_coverage_selector_calibrates_torch_uncertainty(n: int, coverage: float, dtype: torch.dtype) -> None:
+    kappa = torch.rand(n, generator=torch.Generator().manual_seed(n)).to(dtype).requires_grad_()
+    selector = CoverageSelector(coverage).calibrate(kappa)
+    expected = CoverageSelector(coverage).calibrate(kappa.detach().double().numpy())
+    assert selector.threshold == expected.threshold
+    accepted = selector.select(kappa.detach())
+    assert accepted.dtype == torch.bool
+    assert accepted.sum() >= int(np.ceil((n + 1) * coverage))
+
+
+def test_coverage_selector_pipeline_calibrates_ensemble() -> None:
+    model = _ensemble_model()
+    x_cal, x_test = torch.randn(200, 4), torch.randn(100, 4)
+    sp = SelectivePredictor(model, CoverageSelector(0.8))
+    with torch.no_grad():
+        assert sp.calibrate(None, x_cal) is sp
+        result = sp.predict(x_test)
+        kappa_cal = SelectivePredictor(model, ThresholdSelector(1.0)).predict(x_cal).uncertainty
+    expected = CoverageSelector(0.8).calibrate(kappa_cal).threshold
+    assert sp.selector.threshold == expected
+    assert isinstance(result.accepted, torch.Tensor)
+    assert torch.equal(result.accepted, result.uncertainty <= expected)
+
+
+@pytest.mark.parametrize("dtype", [torch.float64, torch.float32])
+def test_sgr_selector_calibrates_torch_uncertainty_and_losses(dtype: torch.dtype) -> None:
+    generator = torch.Generator().manual_seed(0)
+    kappa = torch.rand(400, generator=generator, dtype=torch.float64).to(dtype)
+    losses = (torch.rand(400, generator=generator) < 0.2 * kappa.double() ** 2).to(dtype)
+    kappa.requires_grad_()
+    selector = SGRSelector(0.1, 0.2).calibrate(kappa, losses)
+    expected = SGRSelector(0.1, 0.2).calibrate(kappa.detach().double().numpy(), losses.double().numpy())
+    assert selector.threshold == expected.threshold
+    np.testing.assert_equal(selector.bound, expected.bound)
+    assert selector.select(kappa.detach()).dtype == torch.bool
+
+
+def test_sgr_selector_pipeline_calibrates_ensemble_with_targets() -> None:
+    model = _ensemble_model()
+    x_cal = torch.randn(300, 4)
+    with torch.no_grad():
+        decision = SelectivePredictor(model, ThresholdSelector(1.0)).predict(x_cal)
+        # Labels that agree with the decision for the more certain instances.
+        targets = decision.decision.probabilities.argmax(dim=-1)
+        flip = decision.uncertainty > decision.uncertainty.median()
+        targets = torch.where(flip, (targets + 1) % 3, targets)
+        sp = SelectivePredictor(model, SGRSelector(0.2, 0.2))
+        assert sp.calibrate(targets, x_cal) is sp
+    losses = (decision.decision.probabilities.argmax(dim=-1) != targets).double().numpy()
+    expected = SGRSelector(0.2, 0.2).calibrate(decision.uncertainty.double().numpy(), losses)
+    assert sp.selector.threshold == expected.threshold
+    assert sp.selector.threshold is not None

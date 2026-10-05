@@ -17,6 +17,10 @@ probability, the model's own probability that its decision is wrong. A :class:`T
 sets or the predictions of regression models, keep their own default decomposition, so the criterion and the meaning
 of a threshold change with the model family.
 
+A :class:`CoverageSelector` fits the threshold on unlabeled calibration data so that a target fraction of new
+instances is accepted, with a split-conformal guarantee. An :class:`SGRSelector` fits it on labeled calibration data so
+that the risk of the accepted predictions is bounded with high probability (Geifman and El-Yaniv, 2017).
+
 The total uncertainty is the recommended criterion for selective prediction (Hofman et al., 2025); the epistemic
 uncertainty suits the rejection of out-of-distribution instances, see :class:`SelectivePredictor`.
 """
@@ -24,9 +28,18 @@ uncertainty suits the rejection of out-of-distribution instances, see :class:`Se
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import copy
 from dataclasses import dataclass
 import math
-from typing import TYPE_CHECKING, Any, cast, final, override
+import os
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar, Self, cast, final, override
+import warnings
+
+import flextype
+from flextype import flexdispatch
+import numpy as np
+from scipy.special import betaincinv
 
 from probly.decider import categorical_from_mean
 from probly.quantification import (
@@ -48,6 +61,7 @@ from probly.representation.distribution import (
 )
 from probly.representation.sample import create_sample
 from probly.representer import representer
+from probly.utils.quantile import calculate_quantile
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -58,6 +72,9 @@ if TYPE_CHECKING:
     from probly.representer import Representer
 
 _ZERO_ONE_LOSS = ZeroOneLoss()
+# Warnings skip the frames of probly and of the dispatch library, so they point to the caller's code even when raised
+# through the pipeline or probly.calibrator.calibrate.
+_INTERNAL_PREFIXES = (f"{Path(__file__).parent.parent}{os.sep}", f"{Path(flextype.__file__).parent}{os.sep}")
 
 
 class _DefaultLoss:
@@ -114,18 +131,25 @@ class Selector(ABC):
     A selector decides per instance whether a prediction is accepted, based only on its uncertainty criterion. It does
     not know the model the criterion comes from, so it works with the criterion computed by a
     :class:`SelectivePredictor` as well as with scores computed by the user for any other model. The criterion follows
-    the convention of :func:`~probly.evaluation.selective_prediction.selective_prediction`: higher values mean more
+    the convention of :obj:`~probly.evaluation.selective_prediction.selective_prediction`: higher values mean more
     uncertain, so the instances with the largest criterion are rejected first. A confidence score has to be negated.
 
     The criterion is a one-dimensional array with one value per instance; inputs with a larger batch shape have to be
     flattened. A NaN criterion counts as maximally uncertain, so selectors reject it instead of raising, and a single
-    failed instance does not abort the whole batch. Subclasses check the criterion with :meth:`_check_uncertainty`.
+    failed instance does not abort the whole batch. Subclasses check the criterion with ``_check_uncertainty``.
 
     Types of selective prediction differ in their selector: each is a subclass that overrides :meth:`select`.
     Selectors whose rule has to be fitted on data (e.g. a threshold chosen for a target coverage or risk) should
     implement the :class:`~probly.calibrator.Calibrator` protocol on arrays of the criterion and raise a
-    ``ValueError`` from :meth:`select` while they are not calibrated.
+    ``ValueError`` from :meth:`select` while they are not calibrated. Selectors whose ``calibrate`` also takes the
+    losses of the calibration predictions, e.g. to control the risk, set :attr:`takes_losses` to ``True``.
+
+    Attributes:
+        takes_losses: Whether ``calibrate`` takes the losses of the calibration predictions as its second argument,
+            so that :meth:`~probly.selective_prediction.SelectivePredictor.calibrate` needs labels.
     """
+
+    takes_losses: ClassVar[bool] = False
 
     @abstractmethod
     def select(self, uncertainty: Any) -> Any:  # noqa: ANN401
@@ -144,15 +168,15 @@ class Selector(ABC):
         raise NotImplementedError
 
     @staticmethod
-    def _check_uncertainty[U](uncertainty: U) -> U:
-        """Check that the criterion is a one-dimensional array and return it unchanged."""
+    def _check_uncertainty[U](uncertainty: U, name: str = "uncertainty") -> U:
+        """Check that the criterion, or another per-instance array called ``name``, is one-dimensional."""
         ndim = getattr(uncertainty, "ndim", None)
         if ndim is None:
-            msg = f"uncertainty must be an array with one value per instance, got {type(uncertainty).__name__}."
+            msg = f"{name} must be an array with one value per instance, got {type(uncertainty).__name__}."
             raise TypeError(msg)
         if ndim != 1:
             shape = tuple(cast("Any", uncertainty).shape)
-            msg = f"uncertainty must be one-dimensional with one value per instance, got shape {shape}."
+            msg = f"{name} must be one-dimensional with one value per instance, got shape {shape}."
             raise ValueError(msg)
         return uncertainty
 
@@ -179,9 +203,11 @@ class ThresholdSelector(Selector):
     threshold is the abstention cost on the scale of that loss. On other representations, e.g. the upper entropy of
     a credal set, the threshold has no such reading.
 
-    The threshold is set by the user rather than fitted on data, so no coverage or risk guarantee is given. In
+    The threshold is set by the user rather than fitted on data, so no coverage or risk guarantee is given; use a
+    :class:`CoverageSelector` to fit it for a target coverage, or an :class:`SGRSelector` for a bound on the risk. In
     particular, if the model is miscalibrated, accepted predictions may be wrong more often than the threshold
-    suggests.
+    suggests; a recalibration such as :func:`~probly.method.calibration.temperature_scaling` on held-out data makes
+    the threshold meaningful as a cost.
 
     Attributes:
         threshold: Maximum uncertainty criterion at which a prediction is accepted.
@@ -210,6 +236,291 @@ class ThresholdSelector(Selector):
         return self._check_uncertainty(uncertainty) <= self.threshold
 
 
+@flexdispatch
+def _to_float64_numpy(uncertainty: Any) -> np.ndarray:  # noqa: ANN401
+    """Copy a criterion array into a float64 NumPy array."""
+    return np.asarray(uncertainty, dtype=np.float64)
+
+
+class CoverageSelector(Selector):
+    """Selector that accepts a target fraction of the predictions, with a threshold fitted on calibration data.
+
+    The threshold is the ``ceil((n + 1) * coverage)``-th smallest uncertainty criterion of ``n`` calibration
+    instances, which is split conformal prediction applied to the criterion (Angelopoulos and Bates, 2021). A
+    prediction is accepted if and only if its criterion is less than or equal to the threshold, as in
+    :class:`ThresholdSelector`. If the calibration and test instances are exchangeable and the criterion is computed
+    in the same way for both, the probability that a new instance is accepted is at least ``coverage``. With distinct
+    criterion values it is also at most about ``coverage + 1 / (n + 1)``. This is a conformal version of the post-hoc
+    step of SelectiveNet (Geifman and El-Yaniv, 2019), which bounds the deviation from ``coverage`` with Hoeffding's
+    inequality instead.
+
+    Calibration needs no labels. The guarantee is marginal, i.e. it holds on average over the calibration set and the
+    test instance, not for every calibration set, and it concerns the coverage only: it says nothing about the risk
+    of the accepted predictions. Exchangeability needs the criterion to be independent of the calibration set: do not
+    fit the model, or a recalibration such as temperature scaling, on the same data. With a
+    :class:`SelectivePredictor`, call :meth:`~probly.selective_prediction.SelectivePredictor.calibrate` with
+    ``None`` as labels, which computes the criterion exactly as
+    :meth:`~probly.selective_prediction.SelectivePredictor.predict` does. With precomputed scores, the criterion has
+    to be computed in the same way for calibration and test data. A random criterion, e.g. of an MC-dropout model, must
+    draw its randomness independently per instance; a dropout mask shared across the batch gives all calibration
+    instances the same draw, and the guarantee then holds only approximately.
+
+    Ties at the threshold are accepted, so on a criterion with many equal values, e.g. the epistemic part of the
+    zero-one decomposition, the realized coverage can be well above ``coverage``. With fewer than
+    ``coverage / (1 - coverage)`` calibration instances no finite threshold has the guarantee, and the threshold is
+    ``inf``, which accepts every prediction except those with a NaN criterion. The threshold is computed on a float64
+    NumPy copy of the criterion, so it is the same on every backend and for every floating-point precision. Rounding
+    in the quantile computation occasionally selects the next larger calibration value, which keeps the lower bound
+    but can exceed the upper one by ``1 / (n + 1)``.
+
+    Attributes:
+        coverage: The target fraction of accepted predictions.
+        threshold: Maximum uncertainty criterion at which a prediction is accepted, or ``None`` before
+            :meth:`calibrate` has been called.
+    """
+
+    coverage: float
+    threshold: float | None
+
+    def __init__(self, coverage: float) -> None:
+        """Initialize the selector.
+
+        Args:
+            coverage: The target fraction of accepted predictions, in ``(0, 1]``.
+
+        Raises:
+            ValueError: If ``coverage`` is not in ``(0, 1]``.
+        """
+        coverage = float(coverage)
+        if not 0.0 < coverage <= 1.0:
+            msg = f"coverage must be in (0, 1], got {coverage}."
+            raise ValueError(msg)
+        self.coverage = coverage
+        self.threshold = None
+
+    def calibrate(self, uncertainty: Any) -> Self:  # noqa: ANN401
+        """Fit the threshold on the uncertainty criterion of calibration instances.
+
+        Args:
+            uncertainty: The uncertainty criterion per calibration instance, as a one-dimensional array without NaN.
+                It is copied into a float64 NumPy array, so gradients are not tracked and arrays on an accelerator
+                are copied to the host.
+
+        Returns:
+            The calibrated selector itself.
+
+        Raises:
+            TypeError: If ``uncertainty`` is not an array.
+            ValueError: If ``uncertainty`` is not one-dimensional, is empty, or contains NaN.
+        """
+        scores = _to_float64_numpy(self._check_uncertainty(uncertainty))
+        n = scores.shape[0]
+        if n == 0:
+            msg = "uncertainty must contain at least one calibration instance."
+            raise ValueError(msg)
+        if np.isnan(scores).any():
+            msg = "uncertainty must not contain NaN."
+            raise ValueError(msg)
+        alpha = 1.0 - self.coverage
+        # Same expression as calculate_quantile, which clamps to the maximum if the rank exceeds n.
+        if math.ceil((n + 1) * (1 - alpha)) > n:
+            if self.coverage < 1.0:
+                needed = max(n + 1, math.floor(self.coverage / alpha))
+                while math.ceil((needed + 1) * (1 - alpha)) > needed:
+                    needed += 1
+                warnings.warn(
+                    f"{n} calibration instances are too few for coverage={self.coverage}, so every prediction is "
+                    f"accepted. Use at least {needed} calibration instances.",
+                    UserWarning,
+                    skip_file_prefixes=_INTERNAL_PREFIXES,
+                )
+            self.threshold = math.inf
+        else:
+            self.threshold = calculate_quantile(scores, alpha)
+        return self
+
+    @override
+    def select(self, uncertainty: Any) -> Any:
+        if self.threshold is None:
+            msg = "CoverageSelector is not calibrated. Call calibrate() with calibration uncertainties first."
+            raise ValueError(msg)
+        return self._check_uncertainty(uncertainty) <= self.threshold
+
+
+def _binomial_upper_bound(errors: float, n: int, delta: float) -> float:
+    """Upper limit of the one-sided Clopper-Pearson interval (Geifman and El-Yaniv, 2017, Lemma 3.1).
+
+    It is the largest success probability for which observing at most ``errors`` errors in ``n`` Bernoulli trials has
+    probability at least ``delta``.
+    """
+    if errors >= n:
+        return 1.0
+    return float(betaincinv(errors + 1, n - errors, 1.0 - delta))
+
+
+class SGRSelector(Selector):
+    """Selector that bounds the risk of the accepted predictions, with a threshold fitted on labeled data.
+
+    SGR (selection with guaranteed risk) chooses the threshold on labeled calibration data so that the selective risk,
+    i.e. the expected loss of the accepted predictions ``E[loss * accepted] / E[accepted]``, is at most ``risk`` with
+    probability at least ``1 - delta`` (Geifman and El-Yaniv, 2017). The probability is over the draw of the i.i.d.
+    calibration set, so the guarantee holds for the fitted selector on new data from the same distribution, not
+    conditional on the calibration set. It concerns the risk only and says nothing about the coverage, which can be
+    low, and the threshold rejects every prediction if the risk cannot be certified. A prediction is accepted if and
+    only if its criterion is less than or equal to the threshold, as in :class:`ThresholdSelector`.
+
+    The loss must be binary, i.e. the zero-one loss, because the bound on the risk of a threshold is the
+    Clopper-Pearson upper limit for a Bernoulli parameter. With a :class:`SelectivePredictor`, the default loss is the
+    zero-one loss and the labels are passed as the first argument of
+    :meth:`~probly.selective_prediction.SelectivePredictor.calibrate`, which computes the losses of the decisions.
+    The guarantee needs the criterion and the model to be independent of the calibration set: do not fit the model,
+    or a recalibration such as temperature scaling, on the same data. It also needs the losses of the calibration
+    instances to be independent, so a random model, e.g. an MC-dropout model, must draw its randomness independently
+    per instance; a dropout mask shared across the batch makes both the criterion and the decisions of all
+    calibration instances depend on the same draw.
+
+    The search is the binary search of the paper. The calibration criteria are sorted and ``ceil(log2(n))`` thresholds
+    are tested, starting at the median and moving to a larger threshold, i.e. more coverage, if the bound at the
+    tested one is below ``risk`` and to a smaller one otherwise, each tested at level ``delta / ceil(log2(n))``. This
+    implementation differs from the paper in one point: it returns the last threshold that was certified, whereas the
+    paper returns the last one tested, which may not be certified. If none is, the threshold is ``-inf`` and a warning
+    is raised. The largest calibration criterion is never tested, although with ties at the largest value a tested
+    threshold can accept the whole calibration set. Ties at a tested threshold are accepted. The search loses power
+    if the most confident predictions contain errors: once the test at the median fails, it moves to smaller
+    accepted sets and cannot recover.
+
+    Two alternatives test thresholds from the smallest coverage upwards and stop at the first one that fails, which
+    is fixed-sequence testing (Angelopoulos and Bates, 2021): with a single start, it is best for a head without
+    errors and for small calibration sets, but a single early error stops it; with several starts, as in learn then
+    test (Angelopoulos et al., 2021), it is robust to early errors and improves with more data, at the cost of a
+    smaller level per test. In a simulation with ``risk=0.05`` and ``delta=0.1``, all three kept the rate of
+    violations at most ``delta``; the binary search certified nothing in most runs with 300 calibration instances
+    but matched the multi-start variant from about 1000. The thresholds the binary search tests depend on the labels
+    seen in earlier steps, which the union bound of the paper treats as fixed, so its guarantee is not rigorous in
+    general.
+
+    Attributes:
+        risk: The target selective risk.
+        delta: The probability with which the bound may fail.
+        threshold: Maximum uncertainty criterion at which a prediction is accepted, or ``None`` before
+            :meth:`calibrate` has been called.
+        bound: The upper bound on the selective risk at :attr:`threshold`, or ``None`` before :meth:`calibrate` has
+            been called and NaN if no threshold was certified.
+    """
+
+    takes_losses: ClassVar[bool] = True
+    risk: float
+    delta: float
+    threshold: float | None
+    bound: float | None
+
+    def __init__(self, risk: float, delta: float) -> None:
+        """Initialize the selector.
+
+        Args:
+            risk: The target selective risk, in ``(0, 1)``.
+            delta: The probability with which the risk bound may fail, in ``(0, 1)``.
+
+        Raises:
+            ValueError: If ``risk`` or ``delta`` is not in ``(0, 1)``.
+        """
+        risk = float(risk)
+        delta = float(delta)
+        if not 0.0 < risk < 1.0:
+            msg = f"risk must be in (0, 1), got {risk}."
+            raise ValueError(msg)
+        if not 0.0 < delta < 1.0:
+            msg = f"delta must be in (0, 1), got {delta}."
+            raise ValueError(msg)
+        self.risk = risk
+        self.delta = delta
+        self.threshold = None
+        self.bound = None
+
+    def calibrate(self, uncertainty: Any, losses: Any = None) -> Self:  # noqa: ANN401
+        """Fit the threshold on the uncertainty criterion and the losses of calibration instances.
+
+        Args:
+            uncertainty: The uncertainty criterion per calibration instance, as a one-dimensional array without NaN.
+                It is copied into a float64 NumPy array, so gradients are not tracked and arrays on an accelerator
+                are copied to the host.
+            losses: The zero-one loss of the prediction per calibration instance, as a one-dimensional array of the
+                same length with values in ``{0, 1}``. It is required; it defaults to ``None`` only so that a missing
+                value gives an informative error.
+
+        Returns:
+            The calibrated selector itself.
+
+        Raises:
+            TypeError: If ``losses`` is missing or ``uncertainty`` or ``losses`` is not an array.
+            ValueError: If the arrays are not one-dimensional, differ in length, are empty, contain NaN, or ``losses``
+                has values other than 0 and 1.
+
+        Warns:
+            UserWarning: If no threshold could be certified, in which case every prediction is rejected.
+        """
+        if losses is None:
+            msg = (
+                "SGRSelector needs the losses of the calibration predictions. Pass them as losses, or the labels as "
+                "the first argument of SelectivePredictor.calibrate."
+            )
+            raise TypeError(msg)
+        scores = _to_float64_numpy(self._check_uncertainty(uncertainty))
+        errors = _to_float64_numpy(self._check_uncertainty(losses, "losses"))
+        n = scores.shape[0]
+        if errors.shape[0] != n:
+            msg = f"uncertainty and losses must have the same length, got {n} and {errors.shape[0]}."
+            raise ValueError(msg)
+        if n == 0:
+            msg = "uncertainty must contain at least one calibration instance."
+            raise ValueError(msg)
+        if np.isnan(scores).any() or np.isnan(errors).any():
+            msg = "uncertainty and losses must not contain NaN."
+            raise ValueError(msg)
+        if not np.isin(errors, (0.0, 1.0)).all():
+            msg = (
+                "losses must be binary (0 or 1): the risk bound is the Clopper-Pearson limit for a Bernoulli loss. "
+                "Use the zero-one loss."
+            )
+            raise ValueError(msg)
+
+        order = np.argsort(scores, kind="stable")
+        ascending = scores[order]
+        cumulative_errors = np.concatenate([[0.0], np.cumsum(errors[order])])
+        steps = (n - 1).bit_length()  # ceil(log2(n)), exact for every n
+        level = self.delta / steps if steps > 0 else self.delta
+        z_min, z_max = 1, n
+        certified: tuple[float, float] | None = None
+        for _ in range(steps):
+            z = (z_min + z_max + 1) // 2
+            threshold = float(ascending[n - z])
+            accepted = int(np.searchsorted(ascending, threshold, side="right"))
+            bound = _binomial_upper_bound(float(cumulative_errors[accepted]), accepted, level)
+            if bound < self.risk:
+                z_max = z
+                certified = (threshold, bound)
+            else:
+                z_min = z
+        if certified is None:
+            warnings.warn(
+                f"No threshold could be certified for risk={self.risk} and delta={self.delta} with {n} calibration "
+                "instances, so every prediction is rejected. Use more calibration data or a larger risk.",
+                UserWarning,
+                skip_file_prefixes=_INTERNAL_PREFIXES,
+            )
+            self.threshold, self.bound = -math.inf, math.nan
+        else:
+            self.threshold, self.bound = certified
+        return self
+
+    @override
+    def select(self, uncertainty: Any) -> Any:
+        if self.threshold is None:
+            msg = "SGRSelector is not calibrated. Call calibrate() with calibration uncertainties and losses first."
+            raise ValueError(msg)
+        return self._check_uncertainty(uncertainty) <= self.threshold
+
+
 class SelectivePredictor[**In, R: Representation]:
     """Selective predictor for models transformed by probly.
 
@@ -217,7 +528,9 @@ class SelectivePredictor[**In, R: Representation]:
     MC-dropout model, and decides per instance whether to accept its prediction or to abstain. :meth:`predict` builds
     the model's representation once, decomposes its uncertainty, derives the decision with :attr:`decider`, and lets
     :attr:`selector` determine which predictions are accepted. Since the criterion and the decision are computed from
-    the same representation, they refer to the same forward passes.
+    the same representation, they refer to the same forward passes. A selector that is fitted on data, such as a
+    :class:`CoverageSelector` or an :class:`SGRSelector`, is fitted with :meth:`calibrate`, which also takes the labels
+    that the latter needs.
 
     The criterion is the component of the uncertainty decomposition selected by ``notion``: the total uncertainty by
     default, or its aleatoric or epistemic part. For categorical predictions, the decomposition is induced by the
@@ -254,7 +567,9 @@ class SelectivePredictor[**In, R: Representation]:
     For selective prediction, the total uncertainty is the recommended notion (Hofman et al., 2025). The epistemic
     uncertainty ignores the noise in the labels, so it rejects errors less reliably, but it suits the rejection of
     out-of-distribution instances, for which the log loss, i.e. mutual information, separates better than the
-    zero-one loss.
+    zero-one loss. The zero-one loss is the default because it matches the evaluation by error rate and makes a
+    threshold Chow's rule; the empirical evidence that it also ranks instances better than the log loss is thin, as it
+    comes mainly from random forests on tabular data.
 
     A plain classifier can be wrapped once its output is declared with :func:`~probly.method.cast`, e.g.
     ``cast(net, predictor_type="logit_classifier")`` for a network that outputs logits, or
@@ -265,7 +580,7 @@ class SelectivePredictor[**In, R: Representation]:
 
     Attributes:
         model: The wrapped uncertainty-aware model.
-        selector: The rule that decides which predictions are accepted.
+        selector: The rule that decides which predictions are accepted, a copy of the one passed to the constructor.
         representer: The representer that builds representations from the model's predictions.
         notion: The notion of uncertainty the criterion measures, or the function computing the criterion from the
             representation.
@@ -297,7 +612,9 @@ class SelectivePredictor[**In, R: Representation]:
         Args:
             model: A model accepted by :func:`~probly.representer.representer`, e.g. an ensemble, an MC-dropout
                 model, an evidential model, or a plain classifier passed through :func:`~probly.method.cast`.
-            selector: The rule that decides which predictions are accepted, e.g. a :class:`ThresholdSelector`.
+            selector: The rule that decides which predictions are accepted, e.g. a :class:`ThresholdSelector`. The
+                predictor keeps a copy, so that calibrating it does not change a selector shared with other
+                predictors; read the fitted state from :attr:`selector`.
             notion: The notion of uncertainty to select on, e.g. ``"total"``, ``"aleatoric"``, or ``"epistemic"``.
                 Defaults to ``"total"``. The model's uncertainty decomposition has to contain this notion; a single
                 categorical distribution, for instance, only provides the total uncertainty, and the decomposition of
@@ -311,7 +628,8 @@ class SelectivePredictor[**In, R: Representation]:
                 does not apply to, e.g. of regression models or credal sets, are decomposed by
                 :func:`~probly.quantification.quantify`. A loss passed explicitly has to apply to the representation,
                 otherwise :meth:`predict` raises. ``None`` uses :func:`~probly.quantification.quantify` for every
-                representation, including method-specific decompositions. Ignored if ``notion`` is a function.
+                representation, including method-specific decompositions. If ``notion`` is a function, the loss is
+                not used for the criterion, but :meth:`calibrate` still uses it for the losses when given labels.
             decider: Function mapping a representation to the decision. Defaults to
                 :func:`~probly.decider.categorical_from_mean`.
             representer_kwargs: Keyword arguments passed on to :func:`~probly.representer.representer` when building
@@ -346,7 +664,7 @@ class SelectivePredictor[**In, R: Representation]:
             raise TypeError(msg)
 
         self.model = model
-        self.selector = selector
+        self.selector = copy.deepcopy(selector)
         self.representer = representer(model, **(representer_kwargs or {}))
         self.notion = notion
         self.loss = loss
@@ -382,6 +700,91 @@ class SelectivePredictor[**In, R: Representation]:
             accepted=self.selector.select(uncertainty),
         )
 
+    @final
+    def calibrate(self, y_calib: Any, *calib_args: In.args, **calib_kwargs: In.kwargs) -> Self:  # noqa: ANN401
+        """Fit the selector on calibration inputs.
+
+        The labels come first, as for the other calibrators of probly, and the remaining arguments are passed on to
+        the model's representer, as in :meth:`predict`. The criterion is computed exactly as there, so calibration and
+        test criteria are comparable. Gradients are not stopped, so wrap this in ``torch.no_grad()`` with PyTorch.
+        With this method, the predictor implements the :class:`~probly.calibrator.Calibrator` protocol, even if its
+        selector is not fitted on data.
+
+        A selector that controls the risk, such as an :class:`SGRSelector`, needs the labels, the class index per
+        calibration instance, and receives the losses of the decisions under :attr:`loss`, i.e. one minus the
+        indicator of a correct decision for the zero-one loss. A selector that needs no labels, such as a
+        :class:`CoverageSelector`, takes ``None`` instead, e.g. ``calibrate(None, x_calib)``. Whether labels are
+        needed is checked before the model is run, see :attr:`~probly.selective_prediction.Selector.takes_losses`.
+
+        Args:
+            y_calib: The true class index per calibration instance, as a one-dimensional integer array, or ``None``
+                for selectors that take no labels.
+            *calib_args: Inputs of the model, as in :meth:`predict`.
+            **calib_kwargs: Keyword arguments of the model, as in :meth:`predict`.
+
+        Returns:
+            The calibrated selective predictor itself.
+
+        Raises:
+            TypeError: If :attr:`selector` is not fitted on data, e.g. a :class:`ThresholdSelector`; if no input of
+                the model is given, e.g. because the labels were left out; if ``y_calib`` is given and
+                :attr:`selector` takes no losses, e.g. a :class:`CoverageSelector`; if :attr:`selector` takes losses
+                and ``y_calib`` is ``None``; or if ``y_calib`` is given and :attr:`loss` is ``None``.
+            ValueError: If the criterion is not valid for :attr:`selector`, e.g. empty or containing NaN; if
+                ``y_calib`` is not a one-dimensional array of integers in ``[0, K)`` with one entry per instance; or
+                if the losses are not valid for :attr:`selector`, e.g. not binary for an :class:`SGRSelector`, as for
+                the log loss.
+            NotImplementedError: If ``y_calib`` is given and :attr:`loss` does not apply to the decision, e.g. the
+                default zero-one loss for a regression model. Risk control on regression models is not supported.
+        """
+        selector = self.selector
+        name = type(selector).__name__
+        calibrate = getattr(selector, "calibrate", None)
+        if not callable(calibrate):
+            msg = f"{name} is not fitted on data, so there is nothing to calibrate."
+            raise TypeError(msg)
+        if not calib_args and not calib_kwargs:
+            msg = (
+                "No input of the model was given. Pass the labels first and then the inputs, e.g. "
+                "calibrate(y_calib, x_calib), with y_calib=None for selectors that take no labels."
+            )
+            raise TypeError(msg)
+        if selector.takes_losses and y_calib is None:
+            msg = f"{name} needs the labels of the calibration instances. Pass them first: calibrate(y_calib, x_calib)."
+            raise TypeError(msg)
+        if not selector.takes_losses and y_calib is not None:
+            msg = f"{name} takes no labels. Pass None instead: calibrate(None, x_calib)."
+            raise TypeError(msg)
+        if y_calib is not None and self.loss is None:
+            msg = "Labels need a task loss, but loss is None. Pass a loss, e.g. ZeroOneLoss(), or omit it."
+            raise TypeError(msg)
+        representation = self.representer.represent(*calib_args, **calib_kwargs)
+        uncertainty = self._criterion(representation)
+        if y_calib is None:
+            calibrate(uncertainty)
+        else:
+            calibrate(uncertainty, self._losses(representation, y_calib))
+        return self
+
+    def _losses(self, representation: R, y_calib: Any) -> np.ndarray:  # noqa: ANN401
+        """Task loss of the decision for the true class, per instance."""
+        loss = cast("ScoringRule", self.loss)
+        loss_matrix = _to_float64_numpy(loss.loss(self.decider(representation)))
+        labels = _to_float64_numpy(y_calib)
+        if labels.ndim != 1 or loss_matrix.ndim != 2 or labels.shape[0] != loss_matrix.shape[0]:
+            msg = (
+                "y_calib must be a one-dimensional array with one class index per instance, got shape "
+                f"{labels.shape} for losses of shape {loss_matrix.shape}."
+            )
+            raise ValueError(msg)
+        if not (np.isfinite(labels).all() and (labels == np.round(labels)).all()):
+            msg = "y_calib must be integer class indices."
+            raise ValueError(msg)
+        if labels.size and (labels.min() < 0 or labels.max() >= loss_matrix.shape[1]):
+            msg = f"y_calib must be in [0, {loss_matrix.shape[1]}), got values in [{labels.min()}, {labels.max()}]."
+            raise ValueError(msg)
+        return loss_matrix[np.arange(labels.shape[0]), labels.astype(np.intp)]
+
     def _criterion(self, representation: R) -> Any:  # noqa: ANN401
         notion = self.notion
         if not isinstance(notion, type):
@@ -390,6 +793,17 @@ class SelectivePredictor[**In, R: Representation]:
         if not isinstance(decomposition, Decomposition):
             msg = f"Expected quantify to return a Decomposition, got {type(decomposition).__name__}."
             raise TypeError(msg)
+        components = decomposition.components
+        if notion not in components:
+            names: dict[type[Notion], str] = {}
+            for name, component in notion_registry.items():
+                names.setdefault(component, name)
+            available = ", ".join(repr(names.get(component, component.__name__)) for component in components)
+            msg = (
+                f"The uncertainty decomposition of {type(representation).__name__} has no {notion.__name__}. "
+                f"Pass notion as one of {available}."
+            )
+            raise KeyError(msg)
         return decomposition[notion]
 
     def _decomposition(self, representation: R) -> Any:  # noqa: ANN401

@@ -20,7 +20,12 @@ from probly.representation.distribution.jax_gaussian import (  # noqa: E402
     JaxGaussianDistribution,
     JaxGaussianDistributionSample,
 )
-from probly.selective_prediction import SelectivePredictor, ThresholdSelector  # noqa: E402
+from probly.selective_prediction import (  # noqa: E402
+    CoverageSelector,
+    SelectivePredictor,
+    SGRSelector,
+    ThresholdSelector,
+)
 
 PROBABILITIES = np.array([[0.9, 0.1], [0.5, 0.5], [0.6, 0.4], [0.99, 0.01]])
 
@@ -119,3 +124,41 @@ def test_regression_criterion_comes_from_quantify(notion: str) -> None:
 
     assert isinstance(result.uncertainty, jax.Array)
     np.testing.assert_allclose(np.asarray(result.uncertainty), np.asarray(quantify(representation)[notion]), rtol=1e-6)
+
+
+@pytest.mark.parametrize("dtype", ["float32", "float16", "bfloat16"])
+@pytest.mark.parametrize(("n", "coverage"), [(19, 0.9), (50, 0.3), (99, 0.5)])
+def test_coverage_selector_calibrates_jax_uncertainty(n: int, coverage: float, dtype: str) -> None:
+    kappa = jax.random.uniform(jax.random.key(n), (n,)).astype(dtype)
+    selector = CoverageSelector(coverage).calibrate(kappa)
+    expected = CoverageSelector(coverage).calibrate(np.asarray(kappa, dtype=np.float64))
+    assert selector.threshold == expected.threshold
+    accepted = selector.select(kappa)
+    assert accepted.dtype == jnp.bool_
+    assert int(accepted.sum()) >= int(np.ceil((n + 1) * coverage))
+
+
+def test_coverage_selector_pipeline_calibrates_jax_model() -> None:
+    sp = SelectivePredictor(_JaxCategoricalModel(), CoverageSelector(0.5))
+    assert sp.calibrate(None, None) is sp
+    reference = SelectivePredictor(_NumpyCategoricalModel(), CoverageSelector(0.5)).calibrate(None, None)
+    assert sp.selector.threshold == pytest.approx(reference.selector.threshold)
+
+
+def test_sgr_selector_calibrates_jax_arrays() -> None:
+    kappa = jax.random.uniform(jax.random.key(0), (400,))
+    losses = (jax.random.uniform(jax.random.key(1), (400,)) < 0.2 * kappa**2).astype(jnp.float32)
+    selector = SGRSelector(0.1, 0.2).calibrate(kappa, losses)
+    expected = SGRSelector(0.1, 0.2).calibrate(
+        np.asarray(kappa, dtype=np.float64), np.asarray(losses, dtype=np.float64)
+    )
+    assert selector.threshold == expected.threshold
+    assert selector.select(kappa).dtype == jnp.bool_
+
+
+def test_sgr_selector_pipeline_calibrates_jax_model_with_targets() -> None:
+    targets = np.array([0, 1, 0, 0])
+    sp = SelectivePredictor(_JaxCategoricalModel(), SGRSelector(0.9, 0.5))
+    assert sp.calibrate(jnp.asarray(targets), None) is sp
+    reference = SelectivePredictor(_NumpyCategoricalModel(), SGRSelector(0.9, 0.5)).calibrate(targets, None)
+    assert sp.selector.threshold == pytest.approx(reference.selector.threshold)

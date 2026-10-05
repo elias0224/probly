@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, override
+import warnings
 
 import numpy as np
 import pytest
+from scipy.stats import binom
 
+from probly.calibrator import Calibrator, calibrate
 from probly.decider import categorical_from_mean
 from probly.predictor import predict
 from probly.quantification import (
@@ -33,11 +36,17 @@ from probly.representation.distribution.numpy_gaussian import (
 )
 from probly.representer import Representer, representer
 from probly.selective_prediction import (
+    CoverageSelector,
     SelectivePrediction,
     SelectivePredictor,
     Selector,
+    SGRSelector,
     ThresholdSelector,
 )
+from probly.selective_prediction._common import _binomial_upper_bound
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 PROBABILITIES = np.array([[0.9, 0.1], [0.5, 0.5], [0.6, 0.4], [0.99, 0.01]])
 MAX_PROB_COMPLEMENTS = 1.0 - PROBABILITIES.max(axis=-1)
@@ -463,3 +472,391 @@ def test_custom_selector_runs_through_predictor_pipeline() -> None:
     assert isinstance(result, SelectivePrediction)
     np.testing.assert_array_equal(result.accepted, [False, False, False, True])
     assert result.coverage == 0.25
+
+
+def _kth_smallest(values: np.ndarray, coverage: float) -> float:
+    n = len(values)
+    k = int(np.ceil((n + 1) * coverage))
+    return float(np.sort(values)[k - 1])
+
+
+@pytest.mark.parametrize(("n", "coverage"), [(19, 0.9), (50, 0.8), (99, 0.5), (200, 0.95), (10, 0.75)])
+def test_coverage_threshold_is_order_statistic(n: int, coverage: float) -> None:
+    kappa = np.random.default_rng(n).permutation(n).astype(float) / n
+    selector = CoverageSelector(coverage).calibrate(kappa)
+    assert selector.threshold == _kth_smallest(kappa, coverage)
+    assert isinstance(selector.threshold, float)
+    accepted = selector.select(kappa)
+    assert accepted.sum() == int(np.ceil((n + 1) * coverage))
+
+
+@pytest.mark.parametrize(("n", "coverage"), [(5, 0.9), (9, 0.95), (3, 1.0), (10, 1.0)])
+def test_coverage_threshold_is_inf_if_rank_exceeds_n(n: int, coverage: float) -> None:
+    kappa = np.arange(n, dtype=float)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        selector = CoverageSelector(coverage).calibrate(kappa)
+    assert selector.threshold == np.inf
+    assert selector.select(np.array([1e9, np.nan])).tolist() == [True, False]
+
+
+@pytest.mark.parametrize(("n", "coverage", "needed"), [(3, 0.8, 4), (8, 0.9, 9), (18, 0.95, 19)])
+def test_coverage_warns_if_calibration_set_is_too_small(n: int, coverage: float, needed: int) -> None:
+    with pytest.warns(UserWarning, match=f"Use at least {needed} calibration instances") as record:
+        CoverageSelector(coverage).calibrate(np.arange(n, dtype=float))
+    assert record[0].filename == __file__
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert CoverageSelector(coverage).calibrate(np.arange(needed, dtype=float)).threshold == needed - 1
+
+
+def test_full_coverage_accepts_everything_without_warning() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert CoverageSelector(1.0).calibrate(np.arange(10, dtype=float)).threshold == np.inf
+
+
+@pytest.mark.parametrize("coverage", [0.0, -0.1, 1.5, float("nan")])
+def test_coverage_must_be_in_unit_interval(coverage: float) -> None:
+    with pytest.raises(ValueError, match="coverage"):
+        CoverageSelector(coverage)
+
+
+def test_coverage_selector_requires_calibration_and_returns_self() -> None:
+    selector = CoverageSelector(0.9)
+    assert selector.threshold is None
+    with pytest.raises(ValueError, match="not calibrated"):
+        selector.select(np.array([0.1]))
+    assert selector.calibrate(np.linspace(0.0, 1.0, 20)) is selector
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [np.array([]), np.array([0.1, np.nan]), np.zeros((2, 2))],
+)
+def test_coverage_calibration_rejects_invalid_arrays(bad: np.ndarray) -> None:
+    with pytest.raises(ValueError, match="uncertainty"):
+        CoverageSelector(0.9).calibrate(bad)
+
+
+def test_coverage_calibration_rejects_non_array() -> None:
+    with pytest.raises(TypeError, match="array"):
+        CoverageSelector(0.9).calibrate([0.1, 0.2])
+
+
+def test_coverage_ties_at_threshold_are_accepted() -> None:
+    kappa = np.array([0.1] * 10 + [0.5] * 10)
+    selector = CoverageSelector(0.6).calibrate(kappa)
+    assert selector.threshold == 0.5
+    assert selector.select(kappa).all()
+
+
+def test_coverage_guarantee_by_simulation() -> None:
+    rng = np.random.default_rng(0)
+    n, coverage, repeats = 19, 0.9, 20000
+    realized = np.empty(repeats)
+    for i in range(repeats):
+        cal, test = rng.random(n), rng.random()
+        realized[i] = CoverageSelector(coverage).calibrate(cal).select(np.array([test]))[0]
+    # Without ties the expected coverage is exactly ceil((n + 1) * c) / (n + 1) = 18 / 20.
+    se = np.sqrt(0.9 * 0.1 / repeats)
+    assert coverage - 4 * se <= realized.mean() <= coverage + 1 / (n + 1) + 4 * se
+
+
+def test_coverage_selector_is_a_calibrator() -> None:
+    selector = CoverageSelector(0.9)
+    assert isinstance(selector, Calibrator)
+    assert calibrate(selector, np.linspace(0.0, 1.0, 20)) is selector
+    assert selector.threshold is not None
+
+
+def test_pipeline_calibrate_matches_selector_on_predicted_criterion() -> None:
+    sp = SelectivePredictor(_model(), CoverageSelector(0.5))
+    assert sp.calibrate(None, None) is sp
+    expected = CoverageSelector(0.5).calibrate(1.0 - PROBABILITIES.max(axis=-1))
+    assert sp.selector.threshold == expected.threshold
+    result = sp.predict(None)
+    np.testing.assert_array_equal(result.accepted, result.uncertainty <= expected.threshold)
+
+
+def test_pipeline_calibrate_uses_callable_notion() -> None:
+    sp = SelectivePredictor(_model(), CoverageSelector(0.5), notion=lambda _rep: np.array([4.0, 3.0, 2.0, 1.0]))
+    sp.calibrate(None, None)
+    assert sp.selector.threshold == 3.0
+
+
+def test_pipeline_calibrate_requires_fitted_selector() -> None:
+    with pytest.raises(TypeError, match="ThresholdSelector"):
+        SelectivePredictor(_model(), ThresholdSelector(0.5)).calibrate(None, None)
+
+
+@pytest.mark.parametrize("errors", [0, 1, 4, 17])
+def test_binomial_upper_bound_inverts_the_binomial_cdf(errors: int) -> None:
+    n, delta = 40, 0.05
+    bound = _binomial_upper_bound(errors, n, delta)
+    assert binom.cdf(errors, n, bound) == pytest.approx(delta)
+
+
+def test_binomial_upper_bound_edge_cases() -> None:
+    assert _binomial_upper_bound(10, 10, 0.1) == 1.0
+    assert _binomial_upper_bound(0, 10, 0.1) == pytest.approx(1.0 - 0.1 ** (1 / 10))
+
+
+def _reference_sgr(kappa: np.ndarray, losses: np.ndarray, risk: float, delta: float) -> tuple[float, float, list[int]]:
+    """Plain transcription of Algorithm 1 of Geifman and El-Yaniv (2017), returning the last certified iterate."""
+    n = len(kappa)
+    ordered = np.sort(kappa)
+    steps = int(np.ceil(np.log2(n)))
+    z_min, z_max = 1, n
+    certified = (-np.inf, np.nan)
+    tested = []
+    for _ in range(steps):
+        z = int(np.ceil((z_min + z_max) / 2))
+        tau = ordered[n - z]
+        mask = kappa <= tau
+        tested.append(int(mask.sum()))
+        bound = _binomial_upper_bound(losses[mask].sum(), int(mask.sum()), delta / steps)
+        if bound < risk:
+            z_max = z
+            certified = (tau, bound)
+        else:
+            z_min = z
+    return certified[0], certified[1], tested
+
+
+@pytest.mark.parametrize("seed", range(8))
+@pytest.mark.parametrize("ties", [False, True])
+def test_sgr_matches_reference_transcription(seed: int, ties: bool) -> None:
+    rng = np.random.default_rng(seed)
+    n = int(rng.integers(50, 400))
+    kappa = rng.random(n)
+    if ties:
+        kappa = np.round(kappa, 1)
+    losses = (rng.random(n) < 0.02 + 0.2 * kappa**2).astype(float)
+    expected_threshold, expected_bound, _ = _reference_sgr(kappa, losses, 0.15, 0.2)
+    selector = SGRSelector(0.15, 0.2).calibrate(kappa, losses)
+    assert selector.threshold == expected_threshold
+    np.testing.assert_allclose(selector.bound, expected_bound)
+
+
+def test_sgr_hand_made_case() -> None:
+    kappa = np.arange(8) / 10
+    losses = np.zeros(8)
+    # Tested accepted counts: 4, 6, 7 (all certified), so the threshold is the 7th smallest criterion.
+    assert _reference_sgr(kappa, losses, 0.5, 0.5)[2] == [4, 6, 7]
+    selector = SGRSelector(0.5, 0.5).calibrate(kappa, losses)
+    assert selector.threshold == pytest.approx(0.6)
+    assert selector.bound == pytest.approx(1.0 - (0.5 / 3) ** (1 / 7))
+    np.testing.assert_array_equal(selector.select(kappa), kappa <= 0.6)
+
+
+def test_sgr_returns_last_certified_threshold_not_last_tested() -> None:
+    kappa = np.arange(16) / 16
+    losses = np.zeros(16)
+    losses[12:] = 1.0
+    selector = SGRSelector(0.3, 0.5).calibrate(kappa, losses)
+    assert selector.threshold is not None
+    assert selector.bound is not None
+    assert selector.bound < 0.3
+
+
+@pytest.mark.parametrize(("n", "risk"), [(1, 0.5), (2, 0.9), (50, 0.01)])
+def test_sgr_without_certifiable_threshold_rejects_everything(n: int, risk: float) -> None:
+    kappa = np.linspace(0.0, 1.0, n)
+    losses = np.ones(n)
+    selector = SGRSelector(risk, 0.1)
+    with pytest.warns(UserWarning, match="No threshold could be certified"):
+        assert selector.calibrate(kappa, losses) is selector
+    assert selector.threshold == -np.inf
+    assert np.isnan(selector.bound)
+    assert not selector.select(kappa).any()
+
+
+_KAPPA, _LOSSES = np.linspace(0.0, 1.0, 4), np.ones(4)
+
+
+@pytest.mark.parametrize(
+    "fit",
+    [
+        lambda: SGRSelector(0.01, 0.1).calibrate(_KAPPA, _LOSSES),
+        lambda: calibrate(SGRSelector(0.01, 0.1), _KAPPA, _LOSSES),
+        lambda: SelectivePredictor(_model(), SGRSelector(0.01, 0.1)).calibrate(np.ones(4, dtype=int), None),
+    ],
+    ids=["selector", "calibrator", "pipeline"],
+)
+def test_sgr_warning_points_to_the_caller(fit: Callable[[], object]) -> None:
+    with pytest.warns(UserWarning, match="No threshold could be certified") as record:
+        fit()
+    assert record[0].filename == __file__
+
+
+@pytest.mark.parametrize(("risk", "delta"), [(0.0, 0.1), (1.0, 0.1), (-0.1, 0.1), (0.1, 0.0), (0.1, 1.0)])
+def test_sgr_risk_and_delta_must_be_in_open_unit_interval(risk: float, delta: float) -> None:
+    with pytest.raises(ValueError, match="in \\(0, 1\\)"):
+        SGRSelector(risk, delta)
+
+
+def test_sgr_requires_losses() -> None:
+    with pytest.raises(TypeError, match="losses"):
+        SGRSelector(0.1, 0.1).calibrate(np.linspace(0.0, 1.0, 20))
+
+
+@pytest.mark.parametrize(
+    ("kappa", "losses", "error", "match"),
+    [
+        (np.zeros(5), np.zeros(4), ValueError, "same length"),
+        (np.zeros(0), np.zeros(0), ValueError, "at least one"),
+        (np.array([0.1, np.nan]), np.zeros(2), ValueError, "NaN"),
+        (np.zeros(2), np.array([0.0, np.nan]), ValueError, "NaN"),
+        (np.zeros(2), np.array([0.0, 0.5]), ValueError, "binary"),
+        (np.zeros(2), np.array([0.0, 2.0]), ValueError, "binary"),
+        (np.zeros((2, 2)), np.zeros(2), ValueError, "^uncertainty must be one-dimensional"),
+        (np.zeros(2), np.zeros((2, 2)), ValueError, "^losses must be one-dimensional"),
+        ([0.1, 0.2], np.zeros(2), TypeError, "^uncertainty must be an array"),
+        (np.zeros(2), [0.0, 0.0], TypeError, "^losses must be an array"),
+    ],
+)
+def test_sgr_calibration_rejects_invalid_input(kappa: Any, losses: Any, error: type[Exception], match: str) -> None:  # noqa: ANN401
+    with pytest.raises(error, match=match):
+        SGRSelector(0.1, 0.1).calibrate(kappa, losses)
+
+
+def test_sgr_requires_calibration_before_select() -> None:
+    selector = SGRSelector(0.1, 0.1)
+    assert selector.threshold is None
+    assert selector.bound is None
+    with pytest.raises(ValueError, match="not calibrated"):
+        selector.select(np.zeros(3))
+
+
+def test_sgr_selector_is_a_calibrator() -> None:
+    selector = SGRSelector(0.2, 0.1)
+    assert isinstance(selector, Calibrator)
+    rng = np.random.default_rng(0)
+    kappa = rng.random(500)
+    assert calibrate(selector, kappa, np.zeros(500)) is selector
+    assert selector.threshold is not None
+    assert selector.threshold > 0.0
+
+
+def test_sgr_risk_guarantee_by_simulation() -> None:
+    rng = np.random.default_rng(0)
+    n, risk, delta, repeats = 500, 0.05, 0.2, 300
+    # The error probability is 0.3 * kappa^2, so the selective risk at threshold t is 0.1 * t^2, at most 0.05 up to
+    # t = sqrt(0.5).
+    limit = np.sqrt(0.5)
+    violations = 0
+    for _ in range(repeats):
+        kappa = rng.random(n)
+        losses = (rng.random(n) < 0.3 * kappa**2).astype(float)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            threshold = SGRSelector(risk, delta).calibrate(kappa, losses).threshold
+        violations += threshold > limit
+    assert violations / repeats <= delta
+
+
+def test_pipeline_calibrate_with_labels_matches_selector_on_losses() -> None:
+    labels = np.array([0, 1, 0, 0])
+    sp = SelectivePredictor(_model(), SGRSelector(0.9, 0.5))
+    assert sp.calibrate(labels, None) is sp
+    expected = SGRSelector(0.9, 0.5).calibrate(MAX_PROB_COMPLEMENTS, np.array([0.0, 1.0, 0.0, 0.0]))
+    assert sp.selector.threshold == expected.threshold
+    np.testing.assert_equal(sp.selector.bound, expected.bound)
+
+
+def test_pipeline_losses_follow_the_decision_not_the_ground_truth_class_index() -> None:
+    # The decision is class 0 for every instance, so a target of 1 is an error and a target of 0 is not.
+    sp = SelectivePredictor(_model(), SGRSelector(0.99, 0.5))
+    losses = sp._losses(sp.representer.represent(None), np.array([1, 1, 0, 0]))  # noqa: SLF001
+    np.testing.assert_array_equal(losses, [1.0, 1.0, 0.0, 0.0])
+
+
+class _CountingModel(_RepresentationModel):
+    """Stub model that counts its forward passes."""
+
+    calls = 0
+
+    @override
+    def predict_representation(self, _x: object) -> Any:
+        self.calls += 1
+        return self.representation
+
+
+@pytest.mark.parametrize(
+    ("selector", "labels", "match"),
+    [
+        (CoverageSelector(0.5), np.zeros(4, dtype=int), "CoverageSelector takes no labels"),
+        (SGRSelector(0.5, 0.5), None, "SGRSelector needs the labels"),
+    ],
+)
+def test_pipeline_label_mismatch_raises_before_the_forward_pass(
+    selector: Selector,
+    labels: np.ndarray | None,
+    match: str,
+) -> None:
+    model = _CountingModel(create_categorical_distribution(PROBABILITIES))
+    with pytest.raises(TypeError, match=match):
+        SelectivePredictor(model, selector).calibrate(labels, None)
+    assert model.calls == 0
+
+
+def test_pipeline_calibrate_without_model_input_raises() -> None:
+    model = _CountingModel(create_categorical_distribution(PROBABILITIES))
+    with pytest.raises(TypeError, match="No input of the model"):
+        SelectivePredictor(model, CoverageSelector(0.5)).calibrate(None)
+    assert model.calls == 0
+
+
+def test_pipeline_labels_need_a_task_loss() -> None:
+    sp = SelectivePredictor(_model(), SGRSelector(0.5, 0.5), loss=None)
+    with pytest.raises(TypeError, match="loss is None"):
+        sp.calibrate(np.zeros(4, dtype=int), None)
+
+
+def test_pipeline_non_binary_loss_is_rejected_by_sgr() -> None:
+    sp = SelectivePredictor(_model(), SGRSelector(0.5, 0.5), loss=LogLoss())
+    with pytest.raises(ValueError, match="binary"):
+        sp.calibrate(np.zeros(4, dtype=int), None)
+
+
+@pytest.mark.parametrize(
+    ("labels", "match"),
+    [
+        (np.array([0, 1, 2, 0]), "in \\[0, 2\\)"),
+        (np.array([0, -1, 0, 0]), "in \\[0, 2\\)"),
+        (np.array([0.0, 0.5, 0.0, 0.0]), "integer"),
+        (np.array([0, 1, 0]), "one class index"),
+        (np.zeros((4, 1), dtype=int), "one class index"),
+    ],
+)
+def test_pipeline_rejects_invalid_labels(labels: np.ndarray, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        SelectivePredictor(_model(), SGRSelector(0.5, 0.5)).calibrate(labels, None)
+
+
+def test_pipeline_labels_on_a_regression_model_raise_not_implemented() -> None:
+    sp = SelectivePredictor(_RepresentationModel(_regression_sample()), SGRSelector(0.5, 0.5), decider=lambda r: r)
+    with pytest.raises(NotImplementedError, match="ZeroOneLoss"):
+        sp.calibrate(np.zeros(3, dtype=int), None)
+
+
+def test_pipeline_calibrate_through_the_calibrator_protocol_takes_labels_first() -> None:
+    sp = SelectivePredictor(_model(), SGRSelector(0.9, 0.5))
+    calibrate(sp, np.array([0, 1, 0, 0]), None)
+    expected = SGRSelector(0.9, 0.5).calibrate(MAX_PROB_COMPLEMENTS, np.array([0.0, 1.0, 0.0, 0.0]))
+    assert sp.selector.threshold == expected.threshold
+
+
+def test_pipeline_copies_the_selector() -> None:
+    shared = CoverageSelector(0.5)
+    first = SelectivePredictor(_model(), shared).calibrate(None, None)
+    SelectivePredictor(_model(), shared, notion=lambda _: np.zeros(4)).calibrate(None, None)
+    assert shared.threshold is None
+    assert first.selector.threshold == CoverageSelector(0.5).calibrate(MAX_PROB_COMPLEMENTS).threshold
+
+
+def test_pipeline_missing_notion_names_the_available_ones() -> None:
+    sp = SelectivePredictor(_model(), ThresholdSelector(0.5), notion="epistemic")
+    with pytest.raises(KeyError, match=r"has no EpistemicUncertainty\. Pass notion as one of 'total'"):
+        sp.predict(None)
