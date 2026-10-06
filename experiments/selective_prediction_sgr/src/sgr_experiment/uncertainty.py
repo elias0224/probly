@@ -19,9 +19,9 @@ def one_minus_max(probs: np.ndarray) -> np.ndarray:
     """Softmax response criterion ``1 - max p`` without ties from float saturation.
 
     Computed as the float64 sum of all non-max probabilities. This equals ``1 - max p`` in exact
-    arithmetic, but stays positive and correctly ranked when the max probability rounds to 1.0
-    in float32 (logit gaps above ~17), which would otherwise create a large tie block at 0 that
-    the rank-based SGR search cannot split.
+    arithmetic, but keeps the ranking of confident predictions: float32 values just below 1.0
+    are spaced 2**-24 apart, so ``1 - max`` collapses them into a few large tie blocks that the
+    rank-based SGR search cannot split.
 
     Args:
         probs: Probabilities ``(n, classes)``.

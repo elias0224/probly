@@ -1,7 +1,8 @@
-"""Count ties of the softmax response criterion in the stored predictions (float32 saturation check).
+"""Count ties of the softmax response criterion in the stored predictions (float32 resolution check).
 
-Prints per seed the share of test points whose stored float32 max softmax is exactly 1.0, the error count inside that
-tie block, and the share of tied criterion values for ``1 - max`` versus the tie-free :func:`one_minus_max`.
+Float32 values just below 1.0 are spaced 2**-24 apart, so ``1 - max`` only takes a few distinct values for confident
+predictions. Prints per seed the share of tied criterion values for ``1 - max`` versus the tie-free
+:func:`one_minus_max`, plus the size of the lowest-uncertainty tie block of ``1 - max`` and the errors inside it.
 """
 
 from __future__ import annotations
@@ -27,11 +28,12 @@ def main() -> None:
                 continue
             d = np.load(f)
             p, labels = d["softmax"], d["labels"]
-            sat = p.max(1) == 1.0
-            errors = int((p.argmax(1)[sat] != labels[sat]).sum())
+            naive = 1 - p.astype(np.float64).max(1)
+            block = naive == naive.min()
+            errors = int((p.argmax(1)[block] != labels[block]).sum())
             print(
-                f"{seed_dir.name} {name}: max==1.0 {sat.mean():.3f} ({errors} errors), "
-                f"ties 1-max {tie_share(1 - p.astype(np.float64).max(1)):.3f}, tie-free {tie_share(one_minus_max(p)):.3f}"
+                f"{seed_dir.name} {name}: ties 1-max {tie_share(naive):.3f}, tie-free {tie_share(one_minus_max(p)):.3f}, "
+                f"lowest block {block.mean():.3f} ({errors} errors)"
             )
 
 
