@@ -146,9 +146,10 @@ Further methods built on each seed's `base.pt` with probly's public API, compare
 | `gda` | probly's `GaussianMixtureHead` fitted on the 512-dim features in front of the last Linear layer of the base model; criterion = `negative_log_density`, predictions stay the base softmax. A density/OOD score, not a confidence | none |
 | `ddu` | `ddu(base, sn_coeff=3.0)` fine-tuned, then the density head is fitted on training features; criteria 1 - max softmax and negative log density | 20 epochs, lr 0.01, x0.5 every 10, fp32 |
 | `vbll` | `vbll(base, parameterization="dense")` (a fresh dense variational last layer), trained with `vbll_loss`, kl_weight 1/50000, 100 samples via the probly representer | 20 epochs, whole network SGD lr 0.01 (no weight decay on the VBLL layer), fp32 |
+| `sngp` | `sngp(base, norm_multiplier=6.0, random_feature_init_std=0.05, momentum=-1.0)` (spectral normalization, random-feature GP last layer), trained with cross entropy on the GP mean logits; the precision matrix is reset at the start of every epoch. Criteria 1 - max softmax of the mean logits and the Dempster-Shafer epistemic score (`quantify(predict(model, x)).epistemic`) | 20 epochs, lr 0.01, x0.5 every 10, fp32 |
 
 Criteria: `maxprob` (1 - max mean probability), and for the sampling methods `total`, `aleatoric`, `epistemic` from
-`probly.quantification.quantify`; `density` for `gda` and `ddu`.
+`probly.quantification.quantify`; `density` for `gda` and `ddu`; `ds` (Dempster-Shafer) for `sngp`.
 
 Notes:
 
@@ -167,7 +168,7 @@ Notes:
   dump for that method and seed (a few seconds to a minute), instead of being saved.
 
 ```powershell
-uv run python scripts/train.py --stage finetune --seed 0 --out runs      # also: swag, ddu, vbll
+uv run python scripts/train.py --stage finetune --seed 0 --out runs      # also: swag, ddu, vbll, sngp
 uv run python scripts/dump_methods.py                                   # all methods, all seeds, resumable
 uv run python scripts/evaluate_shift.py                                 # needs dump_shift.py first
 uv run python scripts/run_all.py --methods                              # everything above for seeds 0..4

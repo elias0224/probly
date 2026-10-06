@@ -60,8 +60,9 @@ _METHOD_STYLE = {
     "gda": ("GDA", "#e91e63"),
     "ddu": ("DDU-style", "#5e35b1"),
     "vbll": ("VBLL", "#f4511e"),
+    "sngp": ("SNGP", "#2e7d32"),
 }
-_QUANTITY_LS = {"maxprob": "-", "total": ":", "aleatoric": "-.", "epistemic": "--", "density": "--"}
+_QUANTITY_LS = {"maxprob": "-", "total": ":", "aleatoric": "-.", "epistemic": "--", "density": "--", "ds": "--"}
 # keys of the method npz files that become criteria (``{method}_{key}``)
 METHOD_KEYS = {
     "finetune": ["maxprob"],
@@ -70,6 +71,7 @@ METHOD_KEYS = {
     "gda": ["density"],
     "ddu": ["maxprob", "density"],
     "vbll": ["maxprob", "total", "aleatoric", "epistemic"],
+    "sngp": ["maxprob", "ds"],
 }
 for _m, _keys in METHOD_KEYS.items():
     for _k in _keys:
@@ -84,10 +86,10 @@ MAIN_GROUP = [c for c in CRITERIA if c.startswith(("sr_", "mc_", "ens_"))]
 FIGURE_GROUPS = {
     "": MAIN_GROUP,
     "_methods_maxprob": [
-        "sr_base", "mc_maxprob", "ens_maxprob", "finetune_maxprob", "swa_maxprob", "swag_maxprob", "laplace_maxprob", "ddu_maxprob", "vbll_maxprob",
+        "sr_base", "mc_maxprob", "ens_maxprob", "finetune_maxprob", "swa_maxprob", "swag_maxprob", "laplace_maxprob", "ddu_maxprob", "vbll_maxprob", "sngp_maxprob",
     ],
     "_methods_uncertainty": [
-        "mc_epistemic", "ens_epistemic", "swag_epistemic", "laplace_epistemic", "vbll_epistemic", "gda_density", "ddu_density",
+        "mc_epistemic", "ens_epistemic", "swag_epistemic", "laplace_epistemic", "vbll_epistemic", "gda_density", "ddu_density", "sngp_ds",
     ],
 }
 ID_RISKS = [r for r, _, _ in PAPER]

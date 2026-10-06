@@ -68,3 +68,22 @@ def test_ddu_and_vbll_round_trip(tmp_path: Path) -> None:
         assert torch.allclose(load_vbll(tmp_path / "vbll.pt")(x)[0], vbll_model(x)[0])
     torch.save(build_plain_vgg().state_dict(), tmp_path / "finetune.pt")
     assert isinstance(load_finetune(tmp_path / "finetune.pt"), nn.Sequential)
+
+
+def test_sngp_round_trip(tmp_path: Path) -> None:
+    from sgr_experiment.loaders import load_sngp  # noqa: PLC0415
+    from sgr_experiment.model import to_sngp  # noqa: PLC0415
+
+    x = torch.randn(4, 3, 32, 32)
+    model = to_sngp(build_plain_vgg())
+    model.train()
+    model(x)  # fills the spectral norm buffers and accumulates the precision matrix
+    model.eval()
+    with torch.no_grad():
+        logits, variance = model(x)  # refreshes the covariance
+    torch.save(model.state_dict(), tmp_path / "sngp.pt")
+    loaded = load_sngp(tmp_path / "sngp.pt")
+    with torch.no_grad():
+        logits2, variance2 = loaded(x)
+    assert torch.allclose(logits, logits2, atol=1e-5)
+    assert torch.allclose(variance, variance2, atol=1e-5)

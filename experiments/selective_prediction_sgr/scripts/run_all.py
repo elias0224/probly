@@ -37,7 +37,7 @@ def main() -> None:
     p.add_argument(
         "--methods",
         action="store_true",
-        help="Also train finetune, swag, ddu and vbll, dump them and the post-hoc methods (dump_shift.py, dump_methods.py), "
+        help="Also train finetune, swag, ddu, vbll and sngp, dump them and the post-hoc methods (dump_shift.py, dump_methods.py), "
         "then run evaluate_shift.py.",
     )
     p.add_argument("--datasets", nargs="+", default=None, help="Restrict the shift and method dumps to these datasets.")
@@ -62,7 +62,7 @@ def main() -> None:
         extra_dump = [*extra, *(["--datasets", *a.datasets] if a.datasets else [])]
         epochs = ["--epochs", a.method_epochs] if a.method_epochs else []
         for seed in a.seeds:
-            for stage in ("finetune", "swag", "ddu", "vbll"):
+            for stage in ("finetune", "swag", "ddu", "vbll", "sngp"):
                 run("train.py", "--stage", stage, "--seed", seed, "--out", a.runs, "--data-dir", a.data_dir, *epochs, *extra)
         run("dump_shift.py", "--seeds", *a.seeds, "--runs", a.runs, "--data-dir", a.data_dir, "--num-samples", a.num_samples, *extra_dump)
         run("dump_methods.py", "--seeds", *a.seeds, "--runs", a.runs, "--data-dir", a.data_dir, "--num-samples", a.num_samples, *extra_dump)

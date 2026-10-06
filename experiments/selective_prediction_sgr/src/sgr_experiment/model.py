@@ -5,6 +5,7 @@ from __future__ import annotations
 from torch import nn
 
 from probly.method.ddu import ddu
+from probly.method.sngp import sngp
 from probly.method.swag import swag
 from probly.method.vbll import vbll
 from probly.transformation import dropout
@@ -69,6 +70,23 @@ def to_swag(plain: nn.Module, max_rank: int = 20, scale: float = 0.5) -> nn.Modu
 def to_ddu(plain: nn.Module, sn_coeff: float = 3.0) -> nn.Module:
     """Apply probly's DDU transformation (spectral normalization, encoder, classification and density head)."""
     return ddu(plain, sn_coeff=sn_coeff, predictor_type="logit_classifier")
+
+
+def to_sngp(
+    plain: nn.Module,
+    norm_multiplier: float = 6.0,
+    random_feature_init_std: float = 0.05,
+    momentum: float = -1.0,
+    num_random_features: int = 1024,
+) -> nn.Module:
+    """Apply probly's SNGP transformation (spectral normalization and a random-feature GP last layer)."""
+    return sngp(
+        plain,
+        norm_multiplier=norm_multiplier,
+        random_feature_init_std=random_feature_init_std,
+        momentum=momentum,
+        num_random_features=num_random_features,
+    )
 
 
 def to_vbll(plain: nn.Module, parameterization: str = "dense") -> nn.Module:

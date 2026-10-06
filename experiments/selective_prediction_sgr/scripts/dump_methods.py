@@ -1,7 +1,7 @@
 """Dump predictions and criteria of the post-training methods on the same datasets as ``dump_shift.py``.
 
 Writes ``runs/seed{S}/shift/{method}/{dataset}.npz`` (labels, mean probabilities and the method's criteria) for the
-methods finetune, swag, laplace, gda, ddu and vbll; finished files are skipped. SWAG, DDU, VBLL and finetune need the
+methods finetune, swag, laplace, gda, ddu, vbll and sngp; finished files are skipped. SWAG, DDU, VBLL, SNGP and finetune need the
 weights from ``train.py``; Laplace and the density heads of GDA and DDU are cheap and refit on the training set at the
 start of every run that has something left to dump.
 """
@@ -24,16 +24,17 @@ from torch.utils.data import DataLoader, TensorDataset
 from laplace import Laplace
 from probly.layers.torch import GaussianMixtureHead
 from probly.method.ddu import negative_log_density
+from probly.predictor import predict as probly_predict
 from probly.quantification import quantify
 from probly.representer import representer
 from sgr_experiment.data import load_cifar10, normalize
-from sgr_experiment.loaders import load_base, load_ddu, load_finetune, load_swag, load_vbll
+from sgr_experiment.loaders import load_base, load_ddu, load_finetune, load_sngp, load_swag, load_vbll
 from sgr_experiment.model import disable_dropout
 from sgr_experiment.uncertainty import summarize_samples
 from sgr_experiment.utils import EXPERIMENT_DIR, get_device, run_dir, seed_everything
 
-METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll"]
-NEEDS = {"finetune": "finetune.pt", "swag": "swag.pt", "laplace": "base.pt", "gda": "base.pt", "ddu": "ddu.pt", "vbll": "vbll.pt"}
+METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp"]
+NEEDS = {"finetune": "finetune.pt", "swag": "swag.pt", "laplace": "base.pt", "gda": "base.pt", "ddu": "ddu.pt", "vbll": "vbll.pt", "sngp": "sngp.pt"}
 Predict = Callable[[torch.Tensor], dict[str, np.ndarray]]
 
 
@@ -60,6 +61,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--swag-bn-samples", type=int, default=5000)
     p.add_argument("--sn-coeff", type=float, default=3.0)
     p.add_argument("--vbll-parameterization", default="dense")
+    p.add_argument("--sngp-norm-multiplier", type=float, default=6.0)
+    p.add_argument("--sngp-init-std", type=float, default=0.05)
+    p.add_argument("--sngp-momentum", type=float, default=-1.0)
     return p.parse_args()
 
 
@@ -186,7 +190,25 @@ def build_vbll(seed: int, args: argparse.Namespace, device: torch.device, train:
     return lambda x: summarize_samples(rep.represent(x))
 
 
-BUILDERS = {"finetune": build_finetune, "swag": build_swag, "laplace": build_laplace, "gda": build_gda, "ddu": build_ddu, "vbll": build_vbll}
+def build_sngp(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:  # noqa: ARG001
+    """SNGP: softmax of the GP mean logits and the Dempster-Shafer epistemic score (probly decomposition)."""
+    model = load_sngp(
+        run_dir(args.runs, seed) / "sngp.pt",
+        args.sngp_norm_multiplier,
+        args.sngp_init_std,
+        args.sngp_momentum,
+    ).to(device)
+
+    def predict(x: torch.Tensor) -> dict[str, np.ndarray]:
+        logits, _ = model(x)
+        out = softmax_dict(logits)
+        out["ds"] = quantify(probly_predict(model, x)).epistemic.detach().cpu().numpy().astype(np.float32)
+        return out
+
+    return predict
+
+
+BUILDERS = {"finetune": build_finetune, "swag": build_swag, "laplace": build_laplace, "gda": build_gda, "ddu": build_ddu, "vbll": build_vbll, "sngp": build_sngp}
 
 
 def main() -> None:
