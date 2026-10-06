@@ -1,8 +1,8 @@
 """Dump predictions and criteria of the post-training methods on the same datasets as ``dump_shift.py``.
 
 Writes ``runs/seed{S}/shift/{method}/{dataset}.npz`` (labels, mean probabilities and the method's criteria) for the
-methods finetune, swag, laplace, gda, ddu, vbll and sngp; finished files are skipped. SWAG, DDU, VBLL, SNGP and finetune need the
-weights from ``train.py``; Laplace and the density heads of GDA and DDU are cheap and refit on the training set at the
+methods finetune, swag, laplace, gda, ddu, vbll and sngp (plus the SNGP variants sngp_long and sngp_scratch); finished files
+are skipped. SWAG, DDU, VBLL, SNGP and finetune need the weights from ``train.py``; Laplace and the density heads of GDA and DDU are cheap and refit on the training set at the
 start of every run that has something left to dump.
 """
 
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 import time
 
@@ -33,8 +34,18 @@ from sgr_experiment.model import disable_dropout
 from sgr_experiment.uncertainty import summarize_samples, torch_one_minus_max
 from sgr_experiment.utils import EXPERIMENT_DIR, get_device, run_dir, seed_everything
 
-METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp"]
-NEEDS = {"finetune": "finetune.pt", "swag": "swag.pt", "laplace": "base.pt", "gda": "base.pt", "ddu": "ddu.pt", "vbll": "vbll.pt", "sngp": "sngp.pt"}
+METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp", "sngp_long", "sngp_scratch"]
+NEEDS = {
+    "finetune": "finetune.pt",
+    "swag": "swag.pt",
+    "laplace": "base.pt",
+    "gda": "base.pt",
+    "ddu": "ddu.pt",
+    "vbll": "vbll.pt",
+    "sngp": "sngp.pt",
+    "sngp_long": "sngp_long.pt",
+    "sngp_scratch": "sngp_scratch.pt",
+}
 Predict = Callable[[torch.Tensor], dict[str, np.ndarray]]
 
 
@@ -190,10 +201,16 @@ def build_vbll(seed: int, args: argparse.Namespace, device: torch.device, train:
     return lambda x: summarize_samples(rep.represent(x))
 
 
-def build_sngp(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:  # noqa: ARG001
+def build_sngp(
+    seed: int,
+    args: argparse.Namespace,
+    device: torch.device,
+    train: tuple,  # noqa: ARG001
+    checkpoint: str = "sngp.pt",
+) -> Predict:
     """SNGP: softmax of the GP mean logits and the Dempster-Shafer epistemic score (probly decomposition)."""
     model = load_sngp(
-        run_dir(args.runs, seed) / "sngp.pt",
+        run_dir(args.runs, seed) / checkpoint,
         args.sngp_norm_multiplier,
         args.sngp_init_std,
         args.sngp_momentum,
@@ -208,7 +225,17 @@ def build_sngp(seed: int, args: argparse.Namespace, device: torch.device, train:
     return predict
 
 
-BUILDERS = {"finetune": build_finetune, "swag": build_swag, "laplace": build_laplace, "gda": build_gda, "ddu": build_ddu, "vbll": build_vbll, "sngp": build_sngp}
+BUILDERS = {
+    "finetune": build_finetune,
+    "swag": build_swag,
+    "laplace": build_laplace,
+    "gda": build_gda,
+    "ddu": build_ddu,
+    "vbll": build_vbll,
+    "sngp": build_sngp,
+    "sngp_long": partial(build_sngp, checkpoint="sngp_long.pt"),
+    "sngp_scratch": partial(build_sngp, checkpoint="sngp_scratch.pt"),
+}
 
 
 def main() -> None:

@@ -61,6 +61,8 @@ _METHOD_STYLE = {
     "ddu": ("DDU-style", "#5e35b1"),
     "vbll": ("VBLL", "#f4511e"),
     "sngp": ("SNGP", "#2e7d32"),
+    "sngp_long": ("SNGP 50-ep fine-tune", "#66bb6a"),
+    "sngp_scratch": ("SNGP from scratch", "#1b5e20"),
 }
 _QUANTITY_LS = {"maxprob": "-", "total": ":", "aleatoric": "-.", "epistemic": "--", "density": "--", "ds": "--"}
 # keys of the method npz files that become criteria (``{method}_{key}``)
@@ -72,6 +74,8 @@ METHOD_KEYS = {
     "ddu": ["maxprob", "density"],
     "vbll": ["maxprob", "total", "aleatoric", "epistemic"],
     "sngp": ["maxprob", "ds"],
+    "sngp_long": ["maxprob", "ds"],
+    "sngp_scratch": ["maxprob", "ds"],
 }
 for _m, _keys in METHOD_KEYS.items():
     for _k in _keys:
@@ -87,9 +91,11 @@ FIGURE_GROUPS = {
     "": MAIN_GROUP,
     "_methods_maxprob": [
         "sr_base", "mc_maxprob", "ens_maxprob", "finetune_maxprob", "swa_maxprob", "swag_maxprob", "laplace_maxprob", "ddu_maxprob", "vbll_maxprob", "sngp_maxprob",
+        "sngp_long_maxprob", "sngp_scratch_maxprob",
     ],
     "_methods_uncertainty": [
         "mc_epistemic", "ens_epistemic", "swag_epistemic", "laplace_epistemic", "vbll_epistemic", "gda_density", "ddu_density", "sngp_ds",
+        "sngp_long_ds", "sngp_scratch_ds",
     ],
 }
 ID_RISKS = [r for r, _, _ in PAPER]

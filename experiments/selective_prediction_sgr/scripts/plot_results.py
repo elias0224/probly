@@ -36,6 +36,7 @@ from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 MODES = ["emp", "sgr", "cov", "LTT Bonf", "LTT FS", "Chow raw", "Chow TS", "Conf LAC", "Conf APS"]
 CORRUPTIONS = ["contrast", "gaussian_blur", "gaussian_noise", "pixelate"]
 SPECIAL_METHODS = {"sr_base": "sr_base", "sr_dropout": "sr_dropout", "swa_maxprob": "swa"}
+VARIANT_METHODS = ("sngp_long", "sngp_scratch")  # method names that contain an underscore
 
 
 Table = dict[tuple[str, ...], dict[str, float]]
@@ -59,7 +60,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def method_of(criterion: str) -> str:
-    """Method of a criterion: its prefix before the first underscore (``sr_*`` and ``swa`` handled separately)."""
+    """Method of a criterion: its prefix before the first underscore (``sr_*``, ``swa`` and variants handled separately)."""
+    for variant in VARIANT_METHODS:
+        if criterion.startswith(f"{variant}_"):
+            return variant
     return SPECIAL_METHODS.get(criterion, criterion.split("_", maxsplit=1)[0])
 
 

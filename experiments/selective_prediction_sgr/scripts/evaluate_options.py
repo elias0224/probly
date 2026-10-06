@@ -67,7 +67,7 @@ THRESHOLD_MODES = {"emp", "sgr", "cov", "ltt_bonf", "ltt_fs"}
 PROB_MODES = {"chow_raw", "chow_ts", "conf_lac", "conf_aps"}
 # Criteria that have a probability source: 1 - max prob of sr_*, mc_maxprob, ens_maxprob, {method}_maxprob, swa_maxprob.
 PROB_CRITERIA = {c for c in CRITERIA if c.endswith("_maxprob") or c in ("sr_base", "sr_dropout")}
-PROB_METHODS = ["finetune", "swag", "laplace", "ddu", "vbll", "sngp"]
+PROB_METHODS = ["finetune", "swag", "laplace", "ddu", "vbll", "sngp", "sngp_long", "sngp_scratch"]
 PLOT_RISKS = [0.01, 0.03]
 LOG_FLOOR = 1e-30
 

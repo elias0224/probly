@@ -25,7 +25,17 @@ from sgr_experiment.utils import EXPERIMENT_DIR
 
 TOP_K = (50, 100, 250, 500, 1000, 2500)
 COVERAGES = (0.1, 0.2, 0.3, 0.5, 0.7)
-DEFAULT_CRITERIA = ("sr_base", "ddu_maxprob", "ddu_density", "sngp_maxprob", "sngp_ds")
+DEFAULT_CRITERIA = (
+    "sr_base",
+    "ddu_maxprob",
+    "ddu_density",
+    "sngp_maxprob",
+    "sngp_ds",
+    "sngp_long_maxprob",
+    "sngp_long_ds",
+    "sngp_scratch_maxprob",
+    "sngp_scratch_ds",
+)
 
 
 def parse_args() -> argparse.Namespace:

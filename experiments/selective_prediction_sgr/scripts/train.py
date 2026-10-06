@@ -5,6 +5,8 @@ applies probly's MC dropout, "finetune" keeps the plain model (control for the e
 probly's SWAG and collects weight snapshots, "ddu" applies DDU (spectral normalization, the density head is fitted
 later), "vbll" replaces the last Linear layer by a variational Bayesian last layer, "sngp" applies SNGP (spectral
 normalization and a random-feature Gaussian process last layer; the precision matrix is reset every epoch).
+Two SNGP variants test whether the short fine-tune limits SNGP: "sngp_long" fine-tunes base with the 50-epoch budget
+of finetune/dropout, and "sngp_scratch" trains SNGP from a fresh VGG with the base schedule (no ``base.pt`` needed).
 """
 
 from __future__ import annotations
@@ -39,7 +41,10 @@ DEFAULTS = {
     "ddu": (20, 0.01, 10),
     "vbll": (20, 0.01, 10),
     "sngp": (20, 0.01, 10),
+    "sngp_long": (50, 0.01, 10),
+    "sngp_scratch": (250, 0.1, 25),
 }
+SNGP_STAGES = ("sngp", "sngp_long", "sngp_scratch")
 KL_WEIGHT = 1.0 / 50000  # VBLL: 1 / training set size
 
 
@@ -48,12 +53,12 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--stage", choices=list(DEFAULTS), default="base")
-    p.add_argument("--epochs", type=int, default=None, help="Default: 250 (base), 50 (dropout, finetune), 20 (others).")
+    p.add_argument("--epochs", type=int, default=None, help="Default: 250 (base, sngp_scratch), 50 (dropout, finetune, sngp_long), 20 (others).")
     p.add_argument("--out", type=Path, default=EXPERIMENT_DIR / "runs")
     p.add_argument("--data-dir", type=Path, default=EXPERIMENT_DIR / "data")
     p.add_argument("--batch-size", type=int, default=128)
-    p.add_argument("--lr", type=float, default=None, help="Default: 0.1 (base) or 0.01 (others).")
-    p.add_argument("--step-size", type=int, default=None, help="Halve the lr every this many epochs. Default: 25 (base), constant (swag), else 10.")
+    p.add_argument("--lr", type=float, default=None, help="Default: 0.1 (base, sngp_scratch) or 0.01 (others).")
+    p.add_argument("--step-size", type=int, default=None, help="Halve the lr every this many epochs. Default: 25 (base, sngp_scratch), constant (swag), else 10.")
     p.add_argument("--p", type=float, default=0.5, help="Dropout probability of the inserted layers (stage dropout).")
     p.add_argument("--swag-start", type=int, default=5, help="First epoch (1-based) after which SWAG collects a snapshot.")
     p.add_argument("--swag-max-rank", type=int, default=20)
@@ -84,7 +89,7 @@ def logits_of(stage: str, model: nn.Module, x: torch.Tensor) -> torch.Tensor:
     """Logits of a stage's model (DDU and VBLL models do not return plain logits)."""
     if stage == "ddu":
         return model.classification_head(model.encoder(x))
-    if stage in ("vbll", "sngp"):
+    if stage == "vbll" or stage in SNGP_STAGES:
         return model(x)[0]
     return model(x)
 
@@ -109,7 +114,7 @@ def main() -> None:
     args.step_size = defaults[2] if args.step_size is None else args.step_size
     device = get_device()
     # DDU (power iteration) and VBLL (Cholesky based loss) are kept in fp32.
-    use_amp = device.type == "cuda" and args.stage not in ("ddu", "vbll", "sngp")
+    use_amp = device.type == "cuda" and args.stage not in ("ddu", "vbll", *SNGP_STAGES)
     out = run_dir(args.out, args.seed)
     out.mkdir(parents=True, exist_ok=True)
     ckpt_path = out / f"last_{args.stage}.pt"
@@ -119,8 +124,15 @@ def main() -> None:
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
 
+    sngp_kwargs = {
+        "norm_multiplier": args.sngp_norm_multiplier,
+        "random_feature_init_std": args.sngp_init_std,
+        "momentum": args.sngp_momentum,
+    }
     if args.stage == "base":
         model = build_plain_vgg()
+    elif args.stage == "sngp_scratch":
+        model = to_sngp(build_plain_vgg(), **sngp_kwargs)
     else:
         base_path = out / "base.pt"
         if not base_path.exists():
@@ -133,12 +145,8 @@ def main() -> None:
             "swag": lambda: to_swag(base, max_rank=args.swag_max_rank, scale=args.swag_scale),
             "ddu": lambda: to_ddu(base, sn_coeff=args.sn_coeff),
             "vbll": lambda: to_vbll(base, parameterization=args.vbll_parameterization),
-            "sngp": lambda: to_sngp(
-                base,
-                norm_multiplier=args.sngp_norm_multiplier,
-                random_feature_init_std=args.sngp_init_std,
-                momentum=args.sngp_momentum,
-            ),
+            "sngp": lambda: to_sngp(base, **sngp_kwargs),
+            "sngp_long": lambda: to_sngp(base, **sngp_kwargs),
         }[args.stage]()
     # No channels-last: it was 4-5x slower for this network on an RTX 2070 Super (see scripts/bench.py).
     model = model.to(device)
@@ -189,7 +197,7 @@ def main() -> None:
             torch.manual_seed(args.seed * 100003 + epoch)
             gen = torch.Generator(device=device).manual_seed(args.seed * 100003 + epoch)
             model.train()
-            if args.stage == "sngp" and args.sngp_momentum < 0:
+            if args.stage in SNGP_STAGES and args.sngp_momentum < 0:
                 reset_precision_matrix(model)  # accumulate the precision over exactly one epoch
             total_loss = torch.zeros((), device=device)
             n = 0
@@ -254,7 +262,7 @@ def main() -> None:
         else None,
         "sn_coeff": args.sn_coeff if args.stage == "ddu" else None,
         "sngp": {"norm_multiplier": args.sngp_norm_multiplier, "init_std": args.sngp_init_std, "momentum": args.sngp_momentum}
-        if args.stage == "sngp"
+        if args.stage in SNGP_STAGES
         else None,
         "vbll_parameterization": args.vbll_parameterization if args.stage == "vbll" else None,
         "subset": args.subset,

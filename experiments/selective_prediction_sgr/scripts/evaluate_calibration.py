@@ -27,7 +27,7 @@ from sgr_experiment.metrics import aurc, e_aurc  # noqa: E402
 from sgr_experiment.shift import CORRUPTIONS, SEVERITIES, corrupted_name  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
-METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp"]
+METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp", "sngp_long", "sngp_scratch"]
 SOURCES = ["sr_base", "sr_dropout", "mc", "ens", *METHODS, "swa"]
 SOURCE_STYLE = {
     "sr_base": ("SR, base model", "sr_base", "o"),
