@@ -1,0 +1,12 @@
+criterion,thresholds differing from reference_mean,thresholds differing from reference_std,uncertified r*=0.01_mean,uncertified r*=0.01_std,uncertified r*=0.02_mean,uncertified r*=0.02_std,uncertified r*=0.03_mean,uncertified r*=0.03_std,uncertified r*=0.04_mean,uncertified r*=0.04_std,uncertified r*=0.05_mean,uncertified r*=0.05_std,uncertified r*=0.06_mean,uncertified r*=0.06_std
+sr_base,0.06,0.237487,0.66,0.473709,0,0,0,0,0,0,0,0,0,0
+sr_dropout,0.0566667,0.231205,0,0,0,0,0,0,0,0,0,0,0,0
+mc_maxprob,0.04,0.195959,0,0,0,0,0,0,0,0,0,0,0,0
+mc_total,0.01,0.0994987,0,0,0,0,0,0,0,0,0,0,0,0
+mc_aleatoric,0.0133333,0.114698,0,0,0,0,0,0,0,0,0,0,0,0
+mc_epistemic,0.0266667,0.161107,0,0,0,0,0,0,0,0,0,0,0,0
+mc_variance,0.0133333,0.114698,0,0,0,0,0,0,0,0,0,0,0,0
+ens_maxprob,0.0666667,0.249444,0,0,0,0,0,0,0,0,0,0,0,0
+ens_total,0.0166667,0.128019,0,0,0,0,0,0,0,0,0,0,0,0
+ens_aleatoric,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+ens_epistemic,0.0333333,0.179505,0,0,0,0,0,0,0,0,0,0,0,0
