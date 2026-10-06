@@ -65,7 +65,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--swag-scale", type=float, default=0.5)
     p.add_argument("--sn-coeff", type=float, default=3.0, help="Spectral normalization coefficient (stage ddu).")
     p.add_argument("--sngp-norm-multiplier", type=float, default=6.0, help="Spectral norm bound (stage sngp).")
-    p.add_argument("--sngp-init-std", type=float, default=0.05, help="Init std of the SNGP output layer (stage sngp).")
+    p.add_argument(
+        "--sngp-init-std",
+        type=float,
+        default=None,
+        help="Std of the SNGP random-feature weights. Default: 1.0 (sngp_scratch), 0.05 (fine-tuning a trained base).",
+    )
     p.add_argument("--sngp-momentum", type=float, default=-1.0, help="Precision matrix momentum; < 0 accumulates per epoch.")
     p.add_argument("--vbll-parameterization", default="dense", choices=["diagonal", "dense", "lowrank"])
     p.add_argument("--subset", type=int, default=None, help="Train on a random subset of this many instances.")
@@ -112,6 +117,9 @@ def main() -> None:
     args.epochs = defaults[0] if args.epochs is None else args.epochs
     args.lr = defaults[1] if args.lr is None else args.lr
     args.step_size = defaults[2] if args.step_size is None else args.step_size
+    if args.sngp_init_std is None:
+        # 1.0 is the full RFF kernel for training from scratch; 0.05 keeps cos near linear to preserve trained features.
+        args.sngp_init_std = 1.0 if args.stage == "sngp_scratch" else 0.05
     device = get_device()
     # DDU (power iteration) and VBLL (Cholesky based loss) are kept in fp32.
     use_amp = device.type == "cuda" and args.stage not in ("ddu", "vbll", *SNGP_STAGES)
