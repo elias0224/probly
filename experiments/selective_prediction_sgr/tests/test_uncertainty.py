@@ -54,3 +54,17 @@ def test_summarize_samples_with_sample_axis_one() -> None:
     np.testing.assert_allclose(out["total"], total, atol=1e-5)
     np.testing.assert_allclose(out["aleatoric"], aleatoric, atol=1e-5)
     np.testing.assert_allclose(out["epistemic"], total - aleatoric, atol=1e-5)
+
+
+def test_one_minus_max_breaks_float32_saturation_ties() -> None:
+    from sgr_experiment.uncertainty import one_minus_max, torch_one_minus_max  # noqa: PLC0415
+
+    logits = torch.zeros(3, 10)
+    logits[:, 0] = torch.tensor([20.0, 25.0, 30.0])  # max softmax rounds to 1.0 in float32
+    p = torch.softmax(logits, dim=-1)
+    assert (1 - p.max(-1).values == 0).all()
+    crit = one_minus_max(p.numpy())
+    assert (np.diff(crit) < 0).all()  # strictly ordered by confidence, no ties
+    np.testing.assert_allclose(crit, torch_one_minus_max(p).numpy())
+    q = torch.softmax(torch.randn(50, 10, generator=torch.Generator().manual_seed(2)), dim=-1).double().numpy()
+    np.testing.assert_allclose(one_minus_max(q), 1 - q.max(-1), atol=1e-6)

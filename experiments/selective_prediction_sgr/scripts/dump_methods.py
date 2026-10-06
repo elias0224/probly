@@ -30,7 +30,7 @@ from probly.representer import representer
 from sgr_experiment.data import load_cifar10, normalize
 from sgr_experiment.loaders import load_base, load_ddu, load_finetune, load_sngp, load_swag, load_vbll
 from sgr_experiment.model import disable_dropout
-from sgr_experiment.uncertainty import summarize_samples
+from sgr_experiment.uncertainty import summarize_samples, torch_one_minus_max
 from sgr_experiment.utils import EXPERIMENT_DIR, get_device, run_dir, seed_everything
 
 METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp"]
@@ -70,7 +70,7 @@ def parse_args() -> argparse.Namespace:
 def softmax_dict(logits: torch.Tensor) -> dict[str, np.ndarray]:
     """``mean_probs`` and ``maxprob`` of a deterministic classifier."""
     p = torch.softmax(logits.float(), dim=-1)
-    return {"mean_probs": p.cpu().numpy(), "maxprob": (1 - p.max(-1).values).cpu().numpy()}
+    return {"mean_probs": p.cpu().numpy(), "maxprob": torch_one_minus_max(p).float().cpu().numpy()}
 
 
 def update_bn(model: nn.Module, x_bn: torch.Tensor, batch_size: int = 1000) -> None:

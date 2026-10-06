@@ -15,6 +15,28 @@ if TYPE_CHECKING:
     from probly.representation.representation import Representation
 
 
+def one_minus_max(probs: np.ndarray) -> np.ndarray:
+    """Softmax response criterion ``1 - max p`` without ties from float saturation.
+
+    Computed as the float64 sum of all non-max probabilities. This equals ``1 - max p`` in exact
+    arithmetic, but stays positive and correctly ranked when the max probability rounds to 1.0
+    in float32 (logit gaps above ~17), which would otherwise create a large tie block at 0 that
+    the rank-based SGR search cannot split.
+
+    Args:
+        probs: Probabilities ``(n, classes)``.
+
+    Returns:
+        Float64 array ``(n,)``.
+    """
+    return np.sort(np.asarray(probs, dtype=np.float64), axis=-1)[..., :-1].sum(-1)
+
+
+def torch_one_minus_max(probs: torch.Tensor) -> torch.Tensor:
+    """Torch version of :func:`one_minus_max` (float64 sum of the non-max probabilities, shape ``(n,)``)."""
+    return probs.double().sort(-1).values[..., :-1].sum(-1)
+
+
 def member_representation(probs: torch.Tensor) -> TorchSample:
     """Wrap member probabilities ``(members, n, classes)``, e.g. of a deep ensemble, as a probly sample representation."""
     return TorchSample(tensor=TorchProbabilityCategoricalDistribution(probs), sample_dim=0)
@@ -49,12 +71,12 @@ def sample_probabilities(representation: Representation) -> torch.Tensor:
 def summarize_samples(representation: Representation) -> dict[str, np.ndarray]:
     """Mean probabilities and the criteria ``maxprob``, ``total``, ``aleatoric``, ``epistemic`` as float32 arrays.
 
-    ``maxprob`` is 1 - max mean probability; the three entropies come from probly's ``quantify``.
+    ``maxprob`` is 1 - max mean probability (tie-free, see :func:`torch_one_minus_max`); the three entropies come from probly's ``quantify``.
     """
     mean = sample_probabilities(representation).detach().float().mean(0)
     out = {
         "mean_probs": mean.cpu().numpy(),
-        "maxprob": (1 - mean.max(-1).values).cpu().numpy(),
+        "maxprob": torch_one_minus_max(mean).cpu().numpy(),
     }
     out.update(decompose(representation))
     return {k: v.astype(np.float32) for k, v in out.items()}

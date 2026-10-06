@@ -17,6 +17,7 @@ import numpy as np  # noqa: E402
 
 from probly.selective_prediction import CoverageSelector, SGRSelector  # noqa: E402
 from sgr_experiment.metrics import apply_threshold, coverage_at_risk, risk_coverage_curve, threshold_for_risk  # noqa: E402
+from sgr_experiment.uncertainty import one_minus_max  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
 # Paper Table 1: desired risk r*, test risk, test coverage.
@@ -80,8 +81,8 @@ def load_seed(seed_dir: Path) -> dict:
     }
     losses["mc_paper_variance"] = losses["mc_probly"]
     criteria = {
-        "sr_base": 1 - base["softmax"].astype(np.float64).max(1),
-        "sr_dropout": 1 - d["softmax"].astype(np.float64).max(1),
+        "sr_base": one_minus_max(base["softmax"]),
+        "sr_dropout": one_minus_max(d["softmax"]),
         "mc_probly": probly,
         "mc_paper_variance": d["criterion_variance"].astype(np.float64),
     }

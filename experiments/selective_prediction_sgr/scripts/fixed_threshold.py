@@ -16,6 +16,7 @@ from evaluate import PAPER, fmt, load_seed
 import numpy as np
 
 from sgr_experiment.metrics import apply_threshold, threshold_for_risk
+from sgr_experiment.uncertainty import one_minus_max
 from sgr_experiment.utils import EXPERIMENT_DIR
 
 C_GRID = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5]
@@ -128,7 +129,7 @@ def main() -> None:
                 t = fit_temperature(logp[sel], labels[sel])
                 add("ts", c, "temperature", t)
                 for v, p in (("raw", probs[c]), ("ts", scale(logp, t))):
-                    crit = 1 - p.max(1)
+                    crit = one_minus_max(p)
                     add(v, c, "ece", ece(p[test], labels[test]))
                     for cc in C_GRID:
                         rk, cv = apply_threshold(crit[test], loss[test], cc)

@@ -35,7 +35,7 @@ from sgr_experiment.metrics import (  # noqa: E402
     threshold_for_risk,
 )
 from sgr_experiment.shift import CORRUPTIONS, OOD_DATASETS, SEVERITIES, corrupted_name  # noqa: E402
-from sgr_experiment.uncertainty import decompose, member_representation  # noqa: E402
+from sgr_experiment.uncertainty import decompose, member_representation, one_minus_max  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
 # label, color and line style per criterion; the order is the order of all tables and plots.
@@ -127,9 +127,11 @@ def load_dataset(runs: Path, seeds: list[int], name: str) -> dict | None:
     for d in ds:
         for c, key in (("sr_base", "softmax_base"), ("sr_dropout", "softmax_dropout")):
             p = d[key].astype(np.float64)
-            units[c].append((1 - p.max(1), p.argmax(1)))
+            units[c].append((one_minus_max(p), p.argmax(1)))
         pred = d["mean_probs"].argmax(1)
-        for c in ("mc_maxprob", "mc_total", "mc_aleatoric", "mc_epistemic", "mc_variance"):
+        # Recomputed from the stored mean, the stored float32 1 - max has ties at 0 (see one_minus_max).
+        units["mc_maxprob"].append((one_minus_max(d["mean_probs"]), pred))
+        for c in ("mc_total", "mc_aleatoric", "mc_epistemic", "mc_variance"):
             units[c].append((d[c].astype(np.float64), pred))
     for m, keys in METHOD_KEYS.items():
         mfiles = [runs / f"seed{sd}" / "shift" / m / f"{name}.npz" for sd in seeds]
@@ -140,15 +142,16 @@ def load_dataset(runs: Path, seeds: list[int], name: str) -> dict | None:
             np.testing.assert_array_equal(md["labels"], labels)
             pred = md["mean_probs"].argmax(1)
             for k in keys:
-                units.setdefault(f"{m}_{k}", []).append((md[k].astype(np.float64), pred))
+                crit = one_minus_max(md["mean_probs"]) if k == "maxprob" else md[k].astype(np.float64)
+                units.setdefault(f"{m}_{k}", []).append((crit, pred))
             if m == "swag":
                 p = md["softmax_swa"].astype(np.float64)
-                units.setdefault("swa_maxprob", []).append((1 - p.max(1), p.argmax(1)))
+                units.setdefault("swa_maxprob", []).append((one_minus_max(p), p.argmax(1)))
     members = torch.from_numpy(np.stack([d["softmax_base"] for d in ds]).astype(np.float64))
     mean = members.mean(0).numpy()
     uq = decompose(member_representation(members))
     pred = mean.argmax(1)
-    units["ens_maxprob"].append((1 - mean.max(1), pred))
+    units["ens_maxprob"].append((one_minus_max(mean), pred))
     for k in ("total", "aleatoric", "epistemic"):
         units[f"ens_{k}"].append((uq[k], pred))
     return {"labels": labels, "units": units}
