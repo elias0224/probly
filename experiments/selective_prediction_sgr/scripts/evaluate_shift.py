@@ -16,7 +16,7 @@ import csv
 from pathlib import Path
 import warnings
 
-from evaluate import PAPER, setup_fonts
+from evaluate import PAPER, THIN_FONT, setup_fonts
 import matplotlib as mpl
 
 mpl.use("Agg")
@@ -353,7 +353,7 @@ def style_axes(ax: plt.Axes) -> None:
     ax.xaxis.label.set_fontweight("semibold")
     ax.yaxis.label.set_fontweight("semibold")
     for lab in ax.get_xticklabels() + ax.get_yticklabels():
-        lab.set_fontweight(100)
+        lab.set_fontfamily(THIN_FONT)
 
 
 def save(fig: plt.Figure, path: Path) -> None:

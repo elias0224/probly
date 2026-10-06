@@ -30,6 +30,8 @@ PAPER = [
     (0.06, 0.0572, 0.9784),
 ]
 PAPER_ACC = 0.9354
+# Explicit family: weight 100 in "Fira Sans" resolves to the hairline FiraSans-Two, not to Thin.
+THIN_FONT = ["Fira Sans Thin", "Fira Sans"]
 CRITERIA = ["sr_base", "sr_dropout", "mc_probly", "mc_paper_variance"]
 LABELS = {
     "sr_base": "SR, base model",
@@ -260,7 +262,7 @@ def plot(path: Path, data: list[dict]) -> None:
     ax.set_xlabel("coverage", fontweight="semibold")
     ax.set_ylabel("selective risk", fontweight="semibold")
     for lab in ax.get_xticklabels() + ax.get_yticklabels():
-        lab.set_fontweight(100)
+        lab.set_fontfamily(THIN_FONT)
     ax.legend(loc="upper left", frameon=False)
     ax.grid(alpha=0.25)
     fig.tight_layout()

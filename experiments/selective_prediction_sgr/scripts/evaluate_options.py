@@ -27,16 +27,14 @@ from evaluate_shift import (
     active_criteria,
     load_dataset,
     mean_of,
-    save,
     sgr_selector_threshold,
-    style_axes,
 )
 from fixed_threshold import fit_temperature, scale
 import matplotlib as mpl
 
 mpl.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+from plot_results import plot_modes  # noqa: E402
 
 from probly.conformal_scores import APSScore, lac_score  # noqa: E402
 from probly.selective_prediction import CoverageSelector, ThresholdSelector  # noqa: E402
@@ -315,36 +313,6 @@ def build_tables(acc: dict, data: dict[str, dict], crits: list[str], modes: list
     return md
 
 
-def plot_coverage(path: Path, acc: dict, crits: list[str], modes: list[str], flag: float) -> None:
-    """ID test coverage per criterion with grouped bars per mode; hatched bars have a violation share > ``flag``."""
-    fig, axes = plt.subplots(len(PLOT_RISKS), 1, figsize=(max(9.0, 0.55 * len(crits) * len(modes) / 3), 4.2 * len(PLOT_RISKS)), sharex=True)
-    width = 0.8 / len(modes)
-    for ax, r in zip(np.atleast_1d(axes), PLOT_RISKS, strict=True):
-        for j, m in enumerate(modes):
-            vals = [np.asarray(acc.get(("id", m, r, c, "cov"), [np.nan]), dtype=float) for c in crits]
-            viol = [mean_of(acc, ("id", m, r, c, "viol")) for c in crits]
-            xs = np.arange(len(crits)) + (j - (len(modes) - 1) / 2) * width
-            for x, v, vi in zip(xs, vals, viol, strict=True):
-                if not np.isfinite(v).any():
-                    continue
-                ax.bar(
-                    x, np.nanmean(v), width, yerr=np.nanstd(v), color=MODE_INFO[m][2], edgecolor="white" if vi <= flag else "black",
-                    hatch="////" if vi > flag else None, lw=0.5, error_kw={"lw": 0.7},
-                )
-        ax.set_ylabel(f"test coverage, r* = {r}")
-        ax.set_ylim(0, 1.02)
-        ax.set_xlim(-0.6, len(crits) - 0.4)
-        ax.grid(alpha=0.25, axis="y")
-    handles = [plt.Rectangle((0, 0), 1, 1, fc=MODE_INFO[m][2]) for m in modes]
-    handles.append(plt.Rectangle((0, 0), 1, 1, fc="white", ec="black", hatch="////"))
-    labels = [MODE_INFO[m][0] for m in modes] + [f"violation share > {flag:g}"]
-    np.atleast_1d(axes)[0].legend(handles, labels, frameon=False, ncol=min(5, len(labels)), fontsize=8, loc="upper center", bbox_to_anchor=(0.5, 1.28))
-    np.atleast_1d(axes)[-1].set_xticks(np.arange(len(crits)), crits, rotation=40, ha="right")
-    for ax in np.atleast_1d(axes):
-        style_axes(ax)
-    save(fig, path)
-
-
 def print_summary(acc: dict, crits: list[str], modes: list[str]) -> None:
     """Print coverage and violation share per criterion and mode at r* = 0.01 and 0.03."""
     for r in PLOT_RISKS:
@@ -390,8 +358,7 @@ def main() -> None:
         warnings.simplefilter("ignore", RuntimeWarning)
         acc, seconds = run_protocol(data, probs, crits, modes, args)
     build_tables(acc, data, crits, modes, args.out, len(seeds), args)
-    flag = 10 * args.delta
-    plot_coverage(args.out / "coverage_by_mode.png", acc, crits, modes, flag)
+    plot_modes(args.out, args.out / "coverage_by_mode.png", flag=10 * args.delta)
     print_summary(acc, crits, modes)
     n_units = sum(len(data["cifar10"]["units"][c]) for c in crits)
     print(f"\nProtocol took {seconds:.1f}s for {len(crits)} criteria, {n_units} units x {args.n_splits} splits, {len(data)} datasets.")
