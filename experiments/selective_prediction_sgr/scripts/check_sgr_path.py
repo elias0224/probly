@@ -35,6 +35,9 @@ DEFAULT_CRITERIA = (
     "sngp_long_ds",
     "sngp_scratch_maxprob",
     "sngp_scratch_ds",
+    "dropout_scratch_sr",
+    "dropout_scratch_maxprob",
+    "dropout_scratch_epistemic",
 )
 
 

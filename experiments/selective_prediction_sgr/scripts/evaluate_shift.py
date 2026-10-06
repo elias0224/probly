@@ -63,8 +63,9 @@ _METHOD_STYLE = {
     "sngp": ("SNGP", "#2e7d32"),
     "sngp_long": ("SNGP 50-ep fine-tune", "#66bb6a"),
     "sngp_scratch": ("SNGP from scratch", "#1b5e20"),
+    "dropout_scratch": ("MC dropout from scratch", "#ff8f00"),
 }
-_QUANTITY_LS = {"maxprob": "-", "total": ":", "aleatoric": "-.", "epistemic": "--", "density": "--", "ds": "--"}
+_QUANTITY_LS = {"maxprob": "-", "total": ":", "aleatoric": "-.", "epistemic": "--", "density": "--", "ds": "--", "sr": "--"}
 # keys of the method npz files that become criteria (``{method}_{key}``)
 METHOD_KEYS = {
     "finetune": ["maxprob"],
@@ -76,6 +77,7 @@ METHOD_KEYS = {
     "sngp": ["maxprob", "ds"],
     "sngp_long": ["maxprob", "ds"],
     "sngp_scratch": ["maxprob", "ds"],
+    "dropout_scratch": ["sr", "maxprob", "total", "aleatoric", "epistemic"],
 }
 for _m, _keys in METHOD_KEYS.items():
     for _k in _keys:
@@ -91,11 +93,11 @@ FIGURE_GROUPS = {
     "": MAIN_GROUP,
     "_methods_maxprob": [
         "sr_base", "mc_maxprob", "ens_maxprob", "finetune_maxprob", "swa_maxprob", "swag_maxprob", "laplace_maxprob", "ddu_maxprob", "vbll_maxprob", "sngp_maxprob",
-        "sngp_long_maxprob", "sngp_scratch_maxprob",
+        "sngp_long_maxprob", "sngp_scratch_maxprob", "dropout_scratch_sr", "dropout_scratch_maxprob",
     ],
     "_methods_uncertainty": [
         "mc_epistemic", "ens_epistemic", "swag_epistemic", "laplace_epistemic", "vbll_epistemic", "gda_density", "ddu_density", "sngp_ds",
-        "sngp_long_ds", "sngp_scratch_ds",
+        "sngp_long_ds", "sngp_scratch_ds", "dropout_scratch_epistemic",
     ],
 }
 ID_RISKS = [r for r, _, _ in PAPER]
@@ -148,6 +150,10 @@ def load_dataset(runs: Path, seeds: list[int], name: str) -> dict | None:
             np.testing.assert_array_equal(md["labels"], labels)
             pred = md["mean_probs"].argmax(1)
             for k in keys:
+                if k == "sr":  # deterministic eval-mode softmax, with its own prediction
+                    p = md["softmax_det"].astype(np.float64)
+                    units.setdefault(f"{m}_{k}", []).append((one_minus_max(p), p.argmax(1)))
+                    continue
                 crit = one_minus_max(md["mean_probs"]) if k == "maxprob" else md[k].astype(np.float64)
                 units.setdefault(f"{m}_{k}", []).append((crit, pred))
             if m == "swag":

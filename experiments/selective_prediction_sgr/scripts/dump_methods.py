@@ -1,7 +1,8 @@
 """Dump predictions and criteria of the post-training methods on the same datasets as ``dump_shift.py``.
 
 Writes ``runs/seed{S}/shift/{method}/{dataset}.npz`` (labels, mean probabilities and the method's criteria) for the
-methods finetune, swag, laplace, gda, ddu, vbll and sngp (plus the SNGP variants sngp_long and sngp_scratch); finished files
+methods finetune, swag, laplace, gda, ddu, vbll and sngp (plus the SNGP variants sngp_long and sngp_scratch and dropout_scratch, MC dropout trained from scratch with
+the deterministic eval-mode softmax ``softmax_det`` next to the MC criteria); finished files
 are skipped. SWAG, DDU, VBLL, SNGP and finetune need the weights from ``train.py``; Laplace and the density heads of GDA and DDU are cheap and refit on the training set at the
 start of every run that has something left to dump.
 """
@@ -29,12 +30,12 @@ from probly.predictor import predict as probly_predict
 from probly.quantification import quantify
 from probly.representer import representer
 from sgr_experiment.data import load_cifar10, normalize
-from sgr_experiment.loaders import load_base, load_ddu, load_finetune, load_sngp, load_swag, load_vbll
+from sgr_experiment.loaders import load_base, load_ddu, load_dropout, load_finetune, load_sngp, load_swag, load_vbll
 from sgr_experiment.model import disable_dropout
 from sgr_experiment.uncertainty import summarize_samples, torch_one_minus_max
 from sgr_experiment.utils import EXPERIMENT_DIR, get_device, run_dir, seed_everything
 
-METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp", "sngp_long", "sngp_scratch"]
+METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp", "sngp_long", "sngp_scratch", "dropout_scratch"]
 NEEDS = {
     "finetune": "finetune.pt",
     "swag": "swag.pt",
@@ -45,6 +46,7 @@ NEEDS = {
     "sngp": "sngp.pt",
     "sngp_long": "sngp_long.pt",
     "sngp_scratch": "sngp_scratch.pt",
+    "dropout_scratch": "dropout_scratch.pt",
 }
 Predict = Callable[[torch.Tensor], dict[str, np.ndarray]]
 
@@ -59,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--datasets", nargs="+", default=ALL_DATASETS, choices=ALL_DATASETS)
     p.add_argument("--subset", type=int, default=None, help="Use only the first N images of each dataset (smoke tests).")
     p.add_argument("--batch-size", type=int, default=500)
-    p.add_argument("--num-samples", type=int, default=100, help="Samples of Laplace and VBLL.")
+    p.add_argument("--num-samples", type=int, default=100, help="Samples of Laplace, VBLL and dropout_scratch.")
     p.add_argument("--swag-samples", type=int, default=30)
     p.add_argument("--swag-max-rank", type=int, default=20)
     p.add_argument("--swag-scale", type=float, default=0.5)
@@ -70,6 +72,7 @@ def parse_args() -> argparse.Namespace:
         help="per_sample recomputes the BatchNorm statistics on a fixed training subset for every drawn weight sample.",
     )
     p.add_argument("--swag-bn-samples", type=int, default=5000)
+    p.add_argument("--p", type=float, default=0.5, help="Dropout probability of dropout_scratch (must match training).")
     p.add_argument("--sn-coeff", type=float, default=3.0)
     p.add_argument("--vbll-parameterization", default="dense")
     p.add_argument("--sngp-norm-multiplier", type=float, default=6.0)
@@ -225,6 +228,20 @@ def build_sngp(
     return predict
 
 
+def build_dropout_scratch(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:  # noqa: ARG001
+    """MC dropout trained from scratch (probly representer), plus the deterministic eval-mode softmax ``softmax_det`` (``sr``)."""
+    model = load_dropout(run_dir(args.runs, seed) / "dropout_scratch.pt", p=args.p).to(device)
+    rep = representer(model, num_samples=args.num_samples)
+
+    def predict(x: torch.Tensor) -> dict[str, np.ndarray]:
+        out = summarize_samples(rep.represent(x))
+        model.eval()  # the sampler restores eval mode afterwards; make sure the deterministic pass has no dropout
+        out["softmax_det"] = torch.softmax(model(x).float(), dim=-1).cpu().numpy()
+        return out
+
+    return predict
+
+
 BUILDERS = {
     "finetune": build_finetune,
     "swag": build_swag,
@@ -235,6 +252,7 @@ BUILDERS = {
     "sngp": build_sngp,
     "sngp_long": partial(build_sngp, checkpoint="sngp_long.pt"),
     "sngp_scratch": partial(build_sngp, checkpoint="sngp_scratch.pt"),
+    "dropout_scratch": build_dropout_scratch,
 }
 
 

@@ -7,6 +7,10 @@ later), "vbll" replaces the last Linear layer by a variational Bayesian last lay
 normalization and a random-feature Gaussian process last layer; the precision matrix is reset every epoch).
 Two SNGP variants test whether the short fine-tune limits SNGP: "sngp_long" fine-tunes base with the 50-epoch budget
 of finetune/dropout, and "sngp_scratch" trains SNGP from a fresh VGG with the base schedule (no ``base.pt`` needed).
+Likewise "dropout_scratch" trains the VGG with probly's MC dropout from scratch with the base schedule.
+
+``--deadline`` (unix timestamp) stops training cleanly after the epoch that ends past it (exit code 75, the checkpoint
+``last_{stage}.pt`` is complete); rerunning the same command resumes.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ import csv
 import json
 from pathlib import Path
 import subprocess
+import sys
 import time
 
 import numpy as np
@@ -43,7 +48,9 @@ DEFAULTS = {
     "sngp": (20, 0.01, 10),
     "sngp_long": (50, 0.01, 10),
     "sngp_scratch": (250, 0.1, 25),
+    "dropout_scratch": (250, 0.1, 25),
 }
+EXIT_DEADLINE = 75  # stopped for the time budget, resume later
 SNGP_STAGES = ("sngp", "sngp_long", "sngp_scratch")
 KL_WEIGHT = 1.0 / 50000  # VBLL: 1 / training set size
 
@@ -53,13 +60,13 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--stage", choices=list(DEFAULTS), default="base")
-    p.add_argument("--epochs", type=int, default=None, help="Default: 250 (base, sngp_scratch), 50 (dropout, finetune, sngp_long), 20 (others).")
+    p.add_argument("--epochs", type=int, default=None, help="Default: 250 (base, sngp_scratch, dropout_scratch), 50 (dropout, finetune, sngp_long), 20 (others).")
     p.add_argument("--out", type=Path, default=EXPERIMENT_DIR / "runs")
     p.add_argument("--data-dir", type=Path, default=EXPERIMENT_DIR / "data")
     p.add_argument("--batch-size", type=int, default=128)
-    p.add_argument("--lr", type=float, default=None, help="Default: 0.1 (base, sngp_scratch) or 0.01 (others).")
-    p.add_argument("--step-size", type=int, default=None, help="Halve the lr every this many epochs. Default: 25 (base, sngp_scratch), constant (swag), else 10.")
-    p.add_argument("--p", type=float, default=0.5, help="Dropout probability of the inserted layers (stage dropout).")
+    p.add_argument("--lr", type=float, default=None, help="Default: 0.1 (base, sngp_scratch, dropout_scratch) or 0.01 (others).")
+    p.add_argument("--step-size", type=int, default=None, help="Halve the lr every this many epochs. Default: 25 (base, sngp_scratch, dropout_scratch), constant (swag), else 10.")
+    p.add_argument("--p", type=float, default=0.5, help="Dropout probability of the inserted layers (stages dropout, dropout_scratch).")
     p.add_argument("--swag-start", type=int, default=5, help="First epoch (1-based) after which SWAG collects a snapshot.")
     p.add_argument("--swag-max-rank", type=int, default=20)
     p.add_argument("--swag-scale", type=float, default=0.5)
@@ -73,6 +80,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--sngp-momentum", type=float, default=-1.0, help="Precision matrix momentum; < 0 accumulates per epoch.")
     p.add_argument("--vbll-parameterization", default="dense", choices=["diagonal", "dense", "lowrank"])
+    p.add_argument("--deadline", type=float, default=None, help="Unix timestamp; stop (exit code 75) once it has passed.")
     p.add_argument("--subset", type=int, default=None, help="Train on a random subset of this many instances.")
     return p.parse_args()
 
@@ -139,6 +147,8 @@ def main() -> None:
     }
     if args.stage == "base":
         model = build_plain_vgg()
+    elif args.stage == "dropout_scratch":
+        model = to_mc_dropout(build_plain_vgg(), p=args.p)
     elif args.stage == "sngp_scratch":
         model = to_sngp(build_plain_vgg(), **sngp_kwargs)
     else:
@@ -199,6 +209,9 @@ def main() -> None:
         if new_log:
             writer.writerow(["epoch", "train_loss", "test_acc", "lr", "seconds"])
         for epoch in range(start_epoch, args.epochs):
+            if args.deadline is not None and time.time() >= args.deadline:
+                print(f"Deadline passed before epoch {epoch + 1}; resume later.")
+                sys.exit(EXIT_DEADLINE)
             t0 = time.time()
             # Reseed per epoch (shuffling, augmentation and dropout masks), so a resumed run continues like an
             # uninterrupted one up to nondeterminism of the GPU kernels.
@@ -247,6 +260,9 @@ def main() -> None:
                 tmp,
             )
             replace_with_retry(tmp, ckpt_path)
+            if args.deadline is not None and time.time() >= args.deadline and epoch + 1 < args.epochs:
+                print(f"Deadline passed after epoch {epoch + 1}/{args.epochs}; checkpoint saved, resume later.")
+                sys.exit(EXIT_DEADLINE)
 
     torch.save({k: v.cpu() for k, v in model.state_dict().items()}, out / f"{args.stage}.pt")
     try:
@@ -264,7 +280,7 @@ def main() -> None:
         "momentum": 0.9,
         "weight_decay": 5e-4,
         "batch_size": args.batch_size,
-        "dropout_p": args.p if args.stage == "dropout" else None,
+        "dropout_p": args.p if args.stage in ("dropout", "dropout_scratch") else None,
         "swag": {"start": args.swag_start, "max_rank": args.swag_max_rank, "scale": args.swag_scale}
         if args.stage == "swag"
         else None,

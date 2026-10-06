@@ -66,8 +66,8 @@ ALL_MODES = list(MODE_INFO)
 THRESHOLD_MODES = {"emp", "sgr", "cov", "ltt_bonf", "ltt_fs"}
 PROB_MODES = {"chow_raw", "chow_ts", "conf_lac", "conf_aps"}
 # Criteria that have a probability source: 1 - max prob of sr_*, mc_maxprob, ens_maxprob, {method}_maxprob, swa_maxprob.
-PROB_CRITERIA = {c for c in CRITERIA if c.endswith("_maxprob") or c in ("sr_base", "sr_dropout")}
-PROB_METHODS = ["finetune", "swag", "laplace", "ddu", "vbll", "sngp", "sngp_long", "sngp_scratch"]
+PROB_CRITERIA = {c for c in CRITERIA if c.endswith("_maxprob") or c in ("sr_base", "sr_dropout", "dropout_scratch_sr")}
+PROB_METHODS = ["finetune", "swag", "laplace", "ddu", "vbll", "sngp", "sngp_long", "sngp_scratch", "dropout_scratch"]
 PLOT_RISKS = [0.01, 0.03]
 LOG_FLOOR = 1e-30
 
@@ -111,6 +111,8 @@ def load_probs(runs: Path, seeds: list[int], name: str) -> dict[str, list[np.nda
             out.setdefault(f"{m}_maxprob", []).append(md["mean_probs"])
             if m == "swag":
                 out.setdefault("swa_maxprob", []).append(md["softmax_swa"])
+            if m == "dropout_scratch":
+                out.setdefault("dropout_scratch_sr", []).append(md["softmax_det"])
     out["ens_maxprob"] = [np.stack([d["softmax_base"] for d in ds]).astype(np.float64).mean(0)]
     return {k: v for k, v in out.items() if k in PROB_CRITERIA}
 
