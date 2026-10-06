@@ -33,8 +33,8 @@ def one_minus_max(probs: np.ndarray) -> np.ndarray:
 
 
 def torch_one_minus_max(probs: torch.Tensor) -> torch.Tensor:
-    """Torch version of :func:`one_minus_max` (float64 sum of the non-max probabilities, shape ``(n,)``)."""
-    return probs.double().sort(-1).values[..., :-1].sum(-1)
+    """Torch version of :func:`one_minus_max` (float64 sum of the non-max probabilities on the CPU, since MPS has no float64; shape ``(n,)``)."""
+    return probs.detach().cpu().double().sort(-1).values[..., :-1].sum(-1)
 
 
 def member_representation(probs: torch.Tensor) -> TorchSample:

@@ -1,4 +1,8 @@
-"""Train, dump and evaluate all seeds (``--shift`` adds the distribution shift stages, ``--methods`` the post-training methods); finished steps are skipped."""
+"""Train, dump and evaluate all seeds (``--shift`` adds the distribution shift stages, ``--methods`` the post-training methods).
+
+Finished steps are skipped. ``--options`` runs the phase 2 evaluations on the existing dumps (other threshold rules:
+Learn-then-Test, Chow, conformal; and calibration); ``--options --no-train`` runs only those.
+"""
 
 from __future__ import annotations
 
@@ -42,7 +46,21 @@ def main() -> None:
     )
     p.add_argument("--datasets", nargs="+", default=None, help="Restrict the shift and method dumps to these datasets.")
     p.add_argument("--method-epochs", type=int, default=None, help="Override the epochs of the method stages (smoke tests).")
+    p.add_argument(
+        "--options",
+        action="store_true",
+        help="At the end: evaluate_options.py and evaluate_calibration.py on the existing dumps.",
+    )
+    p.add_argument(
+        "--train",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="--no-train skips training, dumps and the earlier evaluations (use with --options).",
+    )
     a = p.parse_args()
+    if not a.train:
+        run_options(a)
+        return
 
     for seed in a.seeds:
         rd = run_dir(a.runs, seed)
@@ -72,6 +90,14 @@ def main() -> None:
         extra += ["--datasets", *a.datasets] if a.datasets else []
         run("dump_shift.py", "--seeds", *a.seeds, "--runs", a.runs, "--data-dir", a.data_dir, "--num-samples", a.num_samples, *extra)
         run("evaluate_shift.py", "--runs", a.runs, "--out", a.out / "shift", "--n-splits", a.n_splits)
+    if a.options:
+        run_options(a)
+
+
+def run_options(a: argparse.Namespace) -> None:
+    """Phase 2 evaluations: other threshold rules and calibration, both on the existing dumps."""
+    run("evaluate_options.py", "--runs", a.runs, "--out", a.out / "options", "--n-splits", a.n_splits)
+    run("evaluate_calibration.py", "--runs", a.runs, "--out", a.out / "calibration", "--n-splits", a.n_splits)
 
 
 if __name__ == "__main__":
