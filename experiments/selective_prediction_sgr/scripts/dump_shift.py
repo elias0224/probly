@@ -16,6 +16,7 @@ import torch
 from probly.selective_prediction import SelectivePredictor, ThresholdSelector
 from sgr_experiment.data import load_cifar10, normalize
 from sgr_experiment.loaders import load_base, load_dropout
+from sgr_experiment.model import ARCHS
 from sgr_experiment.shift import (
     CORRUPTIONS,
     OOD_DATASETS,
@@ -49,6 +50,7 @@ re-run the same command; torchvision then only verifies the MD5 and extracts it.
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--arch", choices=ARCHS, default="vgg16")
     p.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2, 3, 4])
     p.add_argument("--runs", type=Path, default=EXPERIMENT_DIR / "runs")
     p.add_argument("--data-dir", type=Path, default=EXPERIMENT_DIR / "data")
@@ -124,8 +126,8 @@ def main() -> None:
             print(f"seed {seed}: all requested datasets exist, skipping.")
             continue
         seed_everything(seed + 54321)
-        base = load_base(run_dir(args.runs, seed) / "base.pt").to(device)
-        model = load_dropout(run_dir(args.runs, seed) / "dropout.pt", p=args.p).to(device)
+        base = load_base(run_dir(args.runs, seed) / "base.pt", args.arch).to(device)
+        model = load_dropout(run_dir(args.runs, seed) / "dropout.pt", p=args.p, arch=args.arch).to(device)
         predictor = SelectivePredictor(
             model, ThresholdSelector(float("inf")), representer_kwargs={"num_samples": args.num_samples}
         )

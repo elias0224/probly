@@ -1,4 +1,6 @@
 runs/
+runs_*/
+results_*/
 data/
 smoke/
 __pycache__/

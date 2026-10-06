@@ -15,46 +15,46 @@ from pathlib import Path
 import torch
 from torch import nn
 
-from sgr_experiment.model import build_plain_vgg, to_ddu, to_mc_dropout, to_sngp, to_swag, to_vbll
+from sgr_experiment.model import build_plain, to_ddu, to_mc_dropout, to_sngp, to_swag, to_vbll
 
 
 def _load_state(path: str | Path) -> dict:
     return torch.load(Path(path), map_location="cpu", weights_only=True)
 
 
-def load_base(path: str | Path) -> nn.Sequential:
-    """Load the plain VGG (no dropout before the Linear layers) from ``base.pt``, in eval mode on the CPU."""
-    model = build_plain_vgg()
+def load_base(path: str | Path, arch: str = "vgg16") -> nn.Module:
+    """Load the plain network of ``arch`` (no dropout before the Linear layers) from ``base.pt``, in eval mode on the CPU."""
+    model = build_plain(arch)
     model.load_state_dict(_load_state(path))
     return model.eval()
 
 
-def load_dropout(path: str | Path, p: float = 0.5) -> nn.Module:
+def load_dropout(path: str | Path, p: float = 0.5, arch: str = "vgg16") -> nn.Module:
     """Load the MC-dropout model from ``dropout.pt``, in eval mode on the CPU.
 
     The architecture is rebuilt, the probly dropout transformation is applied with probability ``p``, and then the
     state dict is loaded. ``p`` must match the value used for training.
     """
-    model = to_mc_dropout(build_plain_vgg(), p=p)
+    model = to_mc_dropout(build_plain(arch), p=p)
     model.load_state_dict(_load_state(path))
     return model.eval()
 
 
-def load_finetune(path: str | Path) -> nn.Sequential:
+def load_finetune(path: str | Path, arch: str = "vgg16") -> nn.Module:
     """Load the fine-tuned plain VGG from ``finetune.pt`` (same architecture as the base), in eval mode on the CPU."""
-    return load_base(path)
+    return load_base(path, arch)
 
 
-def load_swag(path: str | Path, max_rank: int = 20, scale: float = 0.5) -> nn.Module:
+def load_swag(path: str | Path, max_rank: int = 20, scale: float = 0.5, arch: str = "vgg16") -> nn.Module:
     """Load the SWAG predictor from ``swag.pt`` (weights and collected statistics), in eval mode on the CPU."""
-    model = to_swag(build_plain_vgg(), max_rank=max_rank, scale=scale)
+    model = to_swag(build_plain(arch), max_rank=max_rank, scale=scale)
     model.load_state_dict(_load_state(path))
     return model.eval()
 
 
-def load_ddu(path: str | Path, sn_coeff: float = 3.0) -> nn.Module:
+def load_ddu(path: str | Path, sn_coeff: float = 3.0, arch: str = "vgg16") -> nn.Module:
     """Load the DDU predictor from ``ddu.pt`` in eval mode on the CPU; the density head is not fitted yet."""
-    model = to_ddu(build_plain_vgg(), sn_coeff=sn_coeff)
+    model = to_ddu(build_plain(arch), sn_coeff=sn_coeff)
     model.load_state_dict(_load_state(path))
     return model.eval()
 
@@ -65,10 +65,11 @@ def load_sngp(
     random_feature_init_std: float = 0.05,
     momentum: float = -1.0,
     num_random_features: int = 1024,
+    arch: str = "vgg16",
 ) -> nn.Module:
     """Load the SNGP model from ``sngp.pt`` in eval mode on the CPU (the model returns ``(logits, variance)``)."""
     model = to_sngp(
-        build_plain_vgg(),
+        build_plain(arch),
         norm_multiplier=norm_multiplier,
         random_feature_init_std=random_feature_init_std,
         momentum=momentum,
@@ -78,8 +79,8 @@ def load_sngp(
     return model.eval()
 
 
-def load_vbll(path: str | Path, parameterization: str = "dense") -> nn.Module:
+def load_vbll(path: str | Path, parameterization: str = "dense", arch: str = "vgg16") -> nn.Module:
     """Load the VBLL model from ``vbll.pt``, in eval mode on the CPU."""
-    model = to_vbll(build_plain_vgg(), parameterization=parameterization)
+    model = to_vbll(build_plain(arch), parameterization=parameterization)
     model.load_state_dict(_load_state(path))
     return model.eval()

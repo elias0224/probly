@@ -31,7 +31,7 @@ from probly.quantification import quantify
 from probly.representer import representer
 from sgr_experiment.data import load_cifar10, normalize
 from sgr_experiment.loaders import load_base, load_ddu, load_dropout, load_finetune, load_sngp, load_swag, load_vbll
-from sgr_experiment.model import disable_dropout
+from sgr_experiment.model import ARCHS, disable_dropout
 from sgr_experiment.uncertainty import summarize_samples, torch_one_minus_max
 from sgr_experiment.utils import EXPERIMENT_DIR, get_device, run_dir, seed_everything
 
@@ -54,6 +54,7 @@ Predict = Callable[[torch.Tensor], dict[str, np.ndarray]]
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--arch", choices=ARCHS, default="vgg16")
     p.add_argument("--methods", nargs="+", default=METHODS, choices=METHODS)
     p.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2, 3, 4])
     p.add_argument("--runs", type=Path, default=EXPERIMENT_DIR / "runs")
@@ -114,15 +115,15 @@ def fit_features(extract: Callable[[torch.Tensor], torch.Tensor], x: torch.Tenso
 
 def build_finetune(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:  # noqa: ARG001
     """Plain fine-tuned model, softmax criterion."""
-    model = load_finetune(run_dir(args.runs, seed) / "finetune.pt").to(device)
+    model = load_finetune(run_dir(args.runs, seed) / "finetune.pt", args.arch).to(device)
     return lambda x: softmax_dict(model(x))
 
 
 def build_swag(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:
     """SWAG via the probly representer, plus the deterministic SWA-mean softmax."""
-    model = load_swag(run_dir(args.runs, seed) / "swag.pt", args.swag_max_rank, args.swag_scale).to(device)
+    model = load_swag(run_dir(args.runs, seed) / "swag.pt", args.swag_max_rank, args.swag_scale, args.arch).to(device)
     disable_dropout(model)  # the sampler would otherwise force the conv-block dropout of the base into train mode
-    swa = disable_dropout(load_base(run_dir(args.runs, seed) / "base.pt")).to(device)  # same architecture as the wrapped model
+    swa = disable_dropout(load_base(run_dir(args.runs, seed) / "base.pt", args.arch)).to(device)  # same architecture as the wrapped model
     swa.load_state_dict(model.model.state_dict())
     vector_to_parameters(model.mean, swa.parameters())
     if args.swag_bn_update == "per_sample":
@@ -157,7 +158,7 @@ def build_swag(seed: int, args: argparse.Namespace, device: torch.device, train:
 
 def build_laplace(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:
     """Last-layer KFAC Laplace of the base model, fitted on the training set, with optimized prior precision."""
-    base = load_base(run_dir(args.runs, seed) / "base.pt").to(device)
+    base = load_base(run_dir(args.runs, seed) / "base.pt", args.arch).to(device)
     la = Laplace(base, "classification", subset_of_weights="last_layer", hessian_structure="kron")
     la.fit(DataLoader(TensorDataset(*train), batch_size=500))
     la.optimize_prior_precision(method="marglik")
@@ -167,7 +168,10 @@ def build_laplace(seed: int, args: argparse.Namespace, device: torch.device, tra
 
 def build_gda(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:
     """Gaussian discriminant analysis on the 512-dim features in front of the last Linear layer of the base model."""
-    layers = list(load_base(run_dir(args.runs, seed) / "base.pt").to(device).children())
+    if args.arch != "vgg16":
+        msg = "gda needs the VGG Sequential (features in front of the last Linear layer); use --arch vgg16."
+        raise SystemExit(msg)
+    layers = list(load_base(run_dir(args.runs, seed) / "base.pt", args.arch).to(device).children())
     extract, last = nn.Sequential(*layers[:-1]), layers[-1]
     head = GaussianMixtureHead(10, 512)
     fit_features(extract, *train, head)
@@ -183,7 +187,7 @@ def build_gda(seed: int, args: argparse.Namespace, device: torch.device, train: 
 
 def build_ddu(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:
     """DDU: classifier softmax and the negative log density of the encoder features (probly representer)."""
-    model = load_ddu(run_dir(args.runs, seed) / "ddu.pt", args.sn_coeff).to(device)
+    model = load_ddu(run_dir(args.runs, seed) / "ddu.pt", args.sn_coeff, args.arch).to(device)
     fit_features(model.encoder, *train, model.density_head)
     model.density_head.to(device)
     rep = representer(model)
@@ -199,7 +203,7 @@ def build_ddu(seed: int, args: argparse.Namespace, device: torch.device, train: 
 
 def build_vbll(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:  # noqa: ARG001
     """VBLL: MC softmax over logits sampled from the closed-form predictive Gaussian (probly representer)."""
-    model = load_vbll(run_dir(args.runs, seed) / "vbll.pt", args.vbll_parameterization).to(device)
+    model = load_vbll(run_dir(args.runs, seed) / "vbll.pt", args.vbll_parameterization, args.arch).to(device)
     rep = representer(model, num_samples=args.num_samples)
     return lambda x: summarize_samples(rep.represent(x))
 
@@ -217,6 +221,7 @@ def build_sngp(
         args.sngp_norm_multiplier,
         args.sngp_init_std,
         args.sngp_momentum,
+        arch=args.arch,
     ).to(device)
 
     def predict(x: torch.Tensor) -> dict[str, np.ndarray]:
@@ -230,7 +235,7 @@ def build_sngp(
 
 def build_dropout_scratch(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:  # noqa: ARG001
     """MC dropout trained from scratch (probly representer), plus the deterministic eval-mode softmax ``softmax_det`` (``sr``)."""
-    model = load_dropout(run_dir(args.runs, seed) / "dropout_scratch.pt", p=args.p).to(device)
+    model = load_dropout(run_dir(args.runs, seed) / "dropout_scratch.pt", p=args.p, arch=args.arch).to(device)
     rep = representer(model, num_samples=args.num_samples)
 
     def predict(x: torch.Tensor) -> dict[str, np.ndarray]:

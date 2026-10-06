@@ -21,6 +21,12 @@ stopped (training resumes per epoch from ``runs/seed{S}/last_{stage}.pt``, dumps
 dump or evaluation job is started with too little time left. ``--shutdown`` powers the PC down (Windows, 2 min delay,
 abort with ``shutdown /a``) however the run ends, also after a crash. Progress is appended to ``runs/rehearsal_log.txt``.
 
+``--arch resnet18`` switches to the one-seed architecture check (VGG-16 vs ResNet-18 for SNGP and DDU), with its own
+default ``--runs runs_resnet18`` and ``--out results_resnet18`` and seed 0 only: train ``base``, ``dropout``, ``dump_shift``,
+train ``ddu`` and ``sngp_scratch``, dump both, then ``check_sgr_path.py`` (output in ``runs_resnet18/check_sgr_path.txt``)::
+
+    uv run python scripts/rehearsal.py --arch resnet18 --hours 9.5 --shutdown
+
 ``--smoke`` runs the whole queue in minutes (1 epoch on a subset, few MC samples, CIFAR-10 only); use it with its own
 ``--runs`` and ``--out``::
 
@@ -38,6 +44,7 @@ import subprocess
 import sys
 import time
 
+from sgr_experiment.model import ARCHS
 from sgr_experiment.utils import EXPERIMENT_DIR, run_dir
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -49,6 +56,7 @@ GATE_DELTA = 0.001
 GATE_CRITERIA = ("maxprob", "ds")
 SMOKE_SUBSET = 512
 SMOKE_SAMPLES = 3
+CHECK_CRITERIA = ("sr_base", "sr_dropout", "mc_maxprob", "ddu_maxprob", "ddu_density", "sngp_scratch_maxprob", "sngp_scratch_ds")
 
 
 @dataclass
@@ -159,7 +167,7 @@ class Queue:
         """Training job of one stage and seed, done once ``{stage}.pt`` exists."""
         a = self.args
         extra = ["--deadline", self.deadline] if self.deadline is not None else []
-        cmd = self.script_cmd("train.py", "--stage", stage, "--seed", seed, "--out", a.runs, "--data-dir", a.data_dir, *extra, *self.train_extra)
+        cmd = self.script_cmd("train.py", "--stage", stage, "--seed", seed, "--out", a.runs, "--data-dir", a.data_dir, "--arch", a.arch, *extra, *self.train_extra)
         return Job(f"train {stage} seed {seed}", "train", lambda: (run_dir(a.runs, seed) / f"{stage}.pt").exists(), lambda: self.exec_cmd(cmd), enabled, note)
 
     def dump_job(self, method: str | None, seeds: list[int], enabled: Callable[[], bool] = lambda: True) -> Job:
@@ -170,7 +178,7 @@ class Queue:
         def done() -> bool:
             return all(run_dir(a.runs, s).joinpath(*sub, f"{d}.npz").exists() for s in seeds for d in a.datasets)
 
-        common = ["--seeds", *seeds, "--runs", a.runs, "--data-dir", a.data_dir, "--num-samples", a.num_samples, "--datasets", *a.datasets, *self.dump_extra]
+        common = ["--seeds", *seeds, "--runs", a.runs, "--data-dir", a.data_dir, "--arch", a.arch, "--num-samples", a.num_samples, "--datasets", *a.datasets, *self.dump_extra]
         cmd = self.script_cmd("dump_methods.py", "--methods", method, *common) if method else self.script_cmd("dump_shift.py", *common)
         return Job(f"dump {method or 'base/dropout (dump_shift)'} seeds {','.join(map(str, seeds))}", "dump", done, lambda: self.exec_cmd(cmd), enabled)
 
@@ -195,9 +203,41 @@ class Queue:
 
         return Job(f"evaluate {out_sub}", "eval", done, run)
 
+    def check_job(self) -> Job:
+        """``check_sgr_path.py`` on the clean dumps (stdout also written to ``check_sgr_path.txt``); done if that file is newer than every dump."""
+        a = self.args
+        out_path = a.runs / "check_sgr_path.txt"
+
+        def done() -> bool:
+            dumps = [f.stat().st_mtime for f in a.runs.glob("seed*/shift/**/*.npz")]
+            return out_path.exists() and out_path.stat().st_mtime >= max(dumps, default=0.0)
+
+        def run() -> int:
+            cmd = self.script_cmd("check_sgr_path.py", "--runs", a.runs, "--seeds", *a.seeds, "--criteria", *CHECK_CRITERIA)
+            self.log("+ " + " ".join(cmd))
+            res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            print(res.stdout, end="", flush=True)
+            print(res.stderr, end="", file=sys.stderr, flush=True)
+            if res.returncode == 0:
+                out_path.write_text(res.stdout, encoding="utf-8")
+            return res.returncode
+
+        return Job("check_sgr_path", "eval", done, run)
+
+    def build_arch_check_jobs(self) -> list[Job]:
+        """Queue of the architecture check: base, dropout, ddu and sngp_scratch for the seeds, then ``check_sgr_path``."""
+        seeds = self.args.seeds
+        jobs = [self.train_job(stage, s) for s in seeds for stage in ("base", "dropout")]
+        jobs.append(self.dump_job(None, seeds))
+        jobs += [self.train_job(stage, s) for s in seeds for stage in ("ddu", "sngp_scratch")]
+        jobs += [self.dump_job(m, seeds) for m in ("ddu", "sngp_scratch")]
+        return [*jobs, self.check_job()]
+
     def build_jobs(self) -> list[Job]:
         """The queue in priority order."""
         a = self.args
+        if a.arch != "vgg16":
+            return self.build_arch_check_jobs()
         seeds = a.seeds
         sngp_on = lambda: a.sngp != "no"  # noqa: E731
         sngp_kept = lambda: self.gate_verdict() is not False and a.sngp != "no"  # noqa: E731
@@ -287,14 +327,15 @@ def shutdown_machine(reason: str) -> None:
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--arch", choices=ARCHS, default="vgg16", help="vgg16: the full rehearsal; resnet18: one-seed architecture check.")
     p.add_argument("--hours", type=float, default=None, help="Time budget of this run in hours (default: none).")
     p.add_argument("--shutdown", action="store_true", help="Shut the PC down when the run ends for any reason (Windows).")
-    p.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2, 3, 4])
+    p.add_argument("--seeds", type=int, nargs="+", default=None, help="Default: 0-4 (vgg16), 0 (resnet18).")
     p.add_argument("--extra-bases", action="store_true", help="Also train base seeds 5-9 at the end (lowest priority).")
     p.add_argument("--sngp", choices=["auto", "yes", "no"], default="auto", help="auto: train SNGP for seeds > 0 only if the gate passes.")
-    p.add_argument("--runs", type=Path, default=EXPERIMENT_DIR / "runs")
+    p.add_argument("--runs", type=Path, default=None, help="Default: runs (runs_resnet18 for resnet18).")
     p.add_argument("--data-dir", type=Path, default=EXPERIMENT_DIR / "data")
-    p.add_argument("--out", type=Path, default=EXPERIMENT_DIR / "results")
+    p.add_argument("--out", type=Path, default=None, help="Default: results (results_resnet18 for resnet18).")
     p.add_argument("--num-samples", type=int, default=100)
     p.add_argument("--n-splits", type=int, default=10)
     p.add_argument("--datasets", nargs="+", default=None, help="Datasets to dump (default: all of dump_shift.py).")
@@ -306,6 +347,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Run the queue, then optionally shut down."""
     args = parse_args()
+    suffix = "" if args.arch == "vgg16" else f"_{args.arch}"
+    args.seeds = args.seeds or ([0, 1, 2, 3, 4] if args.arch == "vgg16" else [0])
+    args.runs = args.runs or EXPERIMENT_DIR / f"runs{suffix}"
+    args.out = args.out or EXPERIMENT_DIR / f"results{suffix}"
     if args.datasets is None:
         from dump_shift import ALL_DATASETS  # noqa: PLC0415
 

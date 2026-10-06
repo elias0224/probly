@@ -1,4 +1,4 @@
-"""Train the VGG-16 on CIFAR-10 in stages (each resumable).
+"""Train the VGG-16 (or, with ``--arch resnet18``, a ResNet-18) on CIFAR-10 in stages (each resumable).
 
 Stage "base" trains the plain VGG. All other stages start from the trained ``base.pt`` and fine-tune it: "dropout"
 applies probly's MC dropout, "finetune" keeps the plain model (control for the extra training), "swag" wraps it in
@@ -33,7 +33,7 @@ from probly.method.sngp import reset_precision_matrix
 from probly.method.vbll import find_vbll_layer
 from sgr_experiment.data import load_cifar10, normalize, train_batches
 from sgr_experiment.loaders import load_base
-from sgr_experiment.model import build_plain_vgg, to_ddu, to_mc_dropout, to_sngp, to_swag, to_vbll
+from sgr_experiment.model import ARCHS, build_plain, to_ddu, to_mc_dropout, to_sngp, to_swag, to_vbll
 from sgr_experiment.utils import EXPERIMENT_DIR, get_device, run_dir, seed_everything
 
 
@@ -59,6 +59,7 @@ def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--arch", choices=ARCHS, default="vgg16", help="Network; a runs directory holds one arch only (checked).")
     p.add_argument("--stage", choices=list(DEFAULTS), default="base")
     p.add_argument("--epochs", type=int, default=None, help="Default: 250 (base, sngp_scratch, dropout_scratch), 50 (dropout, finetune, sngp_long), 20 (others).")
     p.add_argument("--out", type=Path, default=EXPERIMENT_DIR / "runs")
@@ -96,6 +97,13 @@ def replace_with_retry(src: Path, dst: Path, attempts: int = 10, wait: float = 1
             time.sleep(wait)
         else:
             return
+
+
+def check_arch(found: str, wanted: str, path: Path) -> None:
+    """Exit with an error if a finished stage or checkpoint was made for another architecture (missing means vgg16)."""
+    if found != wanted:
+        msg = f"{path} was made for arch {found}, but --arch is {wanted}; use a separate --out directory per arch."
+        raise SystemExit(msg)
 
 
 def logits_of(stage: str, model: nn.Module, x: torch.Tensor) -> torch.Tensor:
@@ -136,6 +144,11 @@ def main() -> None:
     ckpt_path = out / f"last_{args.stage}.pt"
     log_path = out / f"log_{args.stage}.csv"
 
+    for name in {args.stage, "base"}:  # a finished stage, and the base a fine-tune stage would start from
+        meta_path = out / f"{name}.json"
+        if meta_path.exists():
+            check_arch(json.loads(meta_path.read_text(encoding="utf-8")).get("arch", "vgg16"), args.arch, meta_path)
+
     seed_everything(args.seed)
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
@@ -146,17 +159,17 @@ def main() -> None:
         "momentum": args.sngp_momentum,
     }
     if args.stage == "base":
-        model = build_plain_vgg()
+        model = build_plain(args.arch)
     elif args.stage == "dropout_scratch":
-        model = to_mc_dropout(build_plain_vgg(), p=args.p)
+        model = to_mc_dropout(build_plain(args.arch), p=args.p)
     elif args.stage == "sngp_scratch":
-        model = to_sngp(build_plain_vgg(), **sngp_kwargs)
+        model = to_sngp(build_plain(args.arch), **sngp_kwargs)
     else:
         base_path = out / "base.pt"
         if not base_path.exists():
             msg = f"{base_path} not found; train stage base first."
             raise SystemExit(msg)
-        base = load_base(base_path)
+        base = load_base(base_path, args.arch)
         model = {
             "dropout": lambda: to_mc_dropout(base, p=args.p),
             "finetune": lambda: base,
@@ -184,6 +197,7 @@ def main() -> None:
     start_epoch = 0
     if ckpt_path.exists():
         ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+        check_arch(ckpt.get("arch", "vgg16"), args.arch, ckpt_path)
         model.load_state_dict(ckpt["model"])
         opt.load_state_dict(ckpt["optimizer"])
         sched.load_state_dict(ckpt["scheduler"])
@@ -256,6 +270,7 @@ def main() -> None:
                     "scheduler": sched.state_dict(),
                     "scaler": scaler.state_dict(),
                     "epoch": epoch + 1,
+                    "arch": args.arch,
                 },
                 tmp,
             )
@@ -273,6 +288,7 @@ def main() -> None:
         commit = None
     meta = {
         "stage": args.stage,
+        "arch": args.arch,
         "seed": args.seed,
         "epochs": args.epochs,
         "lr": args.lr,

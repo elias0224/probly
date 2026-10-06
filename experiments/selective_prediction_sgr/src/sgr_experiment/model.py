@@ -9,7 +9,9 @@ from probly.method.sngp import sngp
 from probly.method.swag import swag
 from probly.method.vbll import vbll
 from probly.transformation import dropout
+from probly_benchmark.resnet import BasicBlock, ResNet
 
+ARCHS = ("vgg16", "resnet18")
 # 0 stands for max pooling, other entries are the number of output channels of a 3x3 convolution.
 CFG = [64, 64, 0, 128, 128, 0, 256, 256, 256, 0, 512, 512, 512, 0, 512, 512, 512, 0]
 
@@ -47,6 +49,24 @@ def build_plain_vgg(num_classes: int = 10) -> nn.Sequential:
         nn.Linear(512, num_classes),
     ]
     return nn.Sequential(*layers)
+
+
+def build_plain(arch: str = "vgg16", num_classes: int = 10) -> nn.Module:
+    """Build the plain (no dropout before the Linear layers) network of an architecture.
+
+    Args:
+        arch: ``"vgg16"`` (:func:`build_plain_vgg`) or ``"resnet18"`` (the CIFAR ResNet-18 of probly_benchmark).
+        num_classes: Number of output classes.
+
+    Returns:
+        The plain model, which outputs logits.
+    """
+    if arch == "vgg16":
+        return build_plain_vgg(num_classes)
+    if arch == "resnet18":
+        return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
+    msg = f"Unknown arch {arch!r}; expected one of {ARCHS}."
+    raise ValueError(msg)
 
 
 def to_mc_dropout(plain: nn.Module, p: float = 0.5) -> nn.Module:
