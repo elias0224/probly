@@ -67,6 +67,19 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def replace_with_retry(src: Path, dst: Path, attempts: int = 10, wait: float = 1.0) -> None:
+    """Rename ``src`` to ``dst``, retrying while Windows reports the target as locked (antivirus, indexer, sync)."""
+    for i in range(attempts):
+        try:
+            src.replace(dst)
+        except PermissionError:
+            if i == attempts - 1:
+                raise
+            time.sleep(wait)
+        else:
+            return
+
+
 def logits_of(stage: str, model: nn.Module, x: torch.Tensor) -> torch.Tensor:
     """Logits of a stage's model (DDU and VBLL models do not return plain logits)."""
     if stage == "ddu":
@@ -217,7 +230,7 @@ def main() -> None:
                 },
                 tmp,
             )
-            tmp.replace(ckpt_path)
+            replace_with_retry(tmp, ckpt_path)
 
     torch.save({k: v.cpu() for k, v in model.state_dict().items()}, out / f"{args.stage}.pt")
     try:
