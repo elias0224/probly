@@ -43,6 +43,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--runs", type=Path, default=EXPERIMENT_DIR / "runs")
     p.add_argument("--criteria", nargs="+", default=list(DEFAULT_CRITERIA))
+    p.add_argument("--seeds", type=int, nargs="+", default=None, help="Seeds to use (default: all with clean dumps).")
     p.add_argument("--n-splits", type=int, default=10)
     p.add_argument("--split-seed", type=int, default=0)
     p.add_argument("--risk", type=float, default=0.01)
@@ -87,7 +88,7 @@ def trace(scores: np.ndarray, errors: np.ndarray, risk: float, delta: float) -> 
 def main() -> None:
     """Print the search statistics per unit and criterion on the clean test set."""
     args = parse_args()
-    seeds = sorted(int(f.parent.parent.name[4:]) for f in args.runs.glob("seed*/shift/cifar10.npz"))
+    seeds = args.seeds or sorted(int(f.parent.parent.name[4:]) for f in args.runs.glob("seed*/shift/cifar10.npz"))
     data = load_dataset(args.runs, seeds, "cifar10")
     if data is None:
         msg = f"No complete clean dumps (shift/cifar10.npz) under {args.runs}."
