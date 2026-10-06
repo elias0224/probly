@@ -56,9 +56,11 @@ to improve the mean prediction than as a separate score. `ddu_density` (17.7) is
 - **SNGP and ddu_density certify nothing at r* = 0.01.** sngp_maxprob, sngp_ds and ddu_density reach coverage 0
   for SGR and LTT, while emp sits at 0.73 (0.41 for ddu_density). Maxprob is recomputed in float64, so these are
   not float ties. The SNGP risk-coverage curve stays around 0.0085 at 70% coverage and does not drop at low
-  coverage. This looks like a risk floor among the most confident points, not a selector bug.
-  `scripts/check_sgr_path.py` prints the smallest attainable bound per unit: if it is above 0.01, no threshold
-  can be certified.
+  coverage. `scripts/check_sgr_path.py` confirms a genuine risk floor: the smallest Clopper-Pearson bound over
+  all prefixes of the selection half is above 0.01 for every seed (sngp_maxprob 0.0115-0.0148, sngp_ds
+  0.0120-0.0146, ddu_density 0.0136-0.0284). So no threshold can be certified, and this is not a selector bug.
+  sr_base's bimodality is per seed: seed 3 (min bound 0.0073) certifies on all splits, while seeds 0, 1 and 4
+  (0.0102-0.0111) almost never do.
 - **Unguaranteed rules.** emp and cov violate r* in 20-60% of splits. Raw Chow (threshold on the softmax)
   violates in 96-100% of splits at r* = 0.01 for sr_base, sr_dropout, finetune and laplace, and is fine at 0.03.
   Chow after temperature scaling is far too conservative. Conformal LAC gives the highest coverage at r* = 0.01,
