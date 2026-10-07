@@ -213,7 +213,8 @@ class Queue:
             return out_path.exists() and out_path.stat().st_mtime >= max(dumps, default=0.0)
 
         def run() -> int:
-            cmd = self.script_cmd("check_sgr_path.py", "--runs", a.runs, "--seeds", *a.seeds, "--criteria", *CHECK_CRITERIA)
+            criteria = [c for c in CHECK_CRITERIA if a.sngp != "no" or not c.startswith("sngp")]
+            cmd = self.script_cmd("check_sgr_path.py", "--runs", a.runs, "--seeds", *a.seeds, "--criteria", *criteria)
             self.log("+ " + " ".join(cmd))
             res = subprocess.run(cmd, capture_output=True, text=True, check=False)
             print(res.stdout, end="", flush=True)
@@ -227,10 +228,11 @@ class Queue:
     def build_arch_check_jobs(self) -> list[Job]:
         """Queue of the architecture check: base, dropout, ddu and sngp_scratch for the seeds, then ``check_sgr_path``."""
         seeds = self.args.seeds
+        methods = ("ddu",) if self.args.sngp == "no" else ("ddu", "sngp_scratch")
         jobs = [self.train_job(stage, s) for s in seeds for stage in ("base", "dropout")]
         jobs.append(self.dump_job(None, seeds))
-        jobs += [self.train_job(stage, s) for s in seeds for stage in ("ddu", "sngp_scratch")]
-        jobs += [self.dump_job(m, seeds) for m in ("ddu", "sngp_scratch")]
+        jobs += [self.train_job(stage, s) for s in seeds for stage in methods]
+        jobs += [self.dump_job(m, seeds) for m in methods]
         return [*jobs, self.check_job()]
 
     def build_jobs(self) -> list[Job]:
@@ -332,7 +334,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--shutdown", action="store_true", help="Shut the PC down when the run ends for any reason (Windows).")
     p.add_argument("--seeds", type=int, nargs="+", default=None, help="Default: 0-4 (vgg16), 0 (resnet18).")
     p.add_argument("--extra-bases", action="store_true", help="Also train base seeds 5-9 at the end (lowest priority).")
-    p.add_argument("--sngp", choices=["auto", "yes", "no"], default="auto", help="auto: train SNGP for seeds > 0 only if the gate passes.")
+    p.add_argument("--sngp", choices=["auto", "yes", "no"], default="auto", help="auto: train SNGP for seeds > 0 only if the gate passes; no: skip SNGP (resnet18: no sngp_scratch at all).")
     p.add_argument("--runs", type=Path, default=None, help="Default: runs (runs_resnet18 for resnet18).")
     p.add_argument("--data-dir", type=Path, default=EXPERIMENT_DIR / "data")
     p.add_argument("--out", type=Path, default=None, help="Default: results (results_resnet18 for resnet18).")
