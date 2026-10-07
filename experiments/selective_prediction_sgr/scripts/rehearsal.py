@@ -9,6 +9,10 @@ stopped (training resumes per epoch from ``runs/seed{S}/last_{stage}.pt``, dumps
 
 0. prerequisites (already done on a machine that ran ``run_all.py``): train ``base`` and ``dropout`` and run
    ``dump_shift.py`` for every seed;
+0b. candidate methods, seed 0 only (``--candidates yes``, the default; vgg16 only): train ``subensemble`` (from
+   ``base.pt``), ``masksembles`` and ``deup_base``, dump ``subensemble``, ``masksembles`` and ``deup`` (the DEUP error
+   head is fitted at dump time), then ``check_sgr_path.py --seeds 0`` on them next to the sr_base, sr_dropout, mc and ddu
+   baselines (output in ``runs/check_candidates.txt``). The seeds 0-4 evaluations ignore the seed-0-only dumps;
 1. train ``sngp_scratch`` seed 0, dump it, then the SNGP gate (``--sngp auto``): SNGP is only trained for the other
    seeds if its smallest Clopper-Pearson bound on the clean test set gets below the target risk (verdict in
    ``runs/rehearsal_sngp_gate.json``);
@@ -21,7 +25,7 @@ stopped (training resumes per epoch from ``runs/seed{S}/last_{stage}.pt``, dumps
 dump or evaluation job is started with too little time left. ``--shutdown`` powers the PC down (Windows, 2 min delay,
 abort with ``shutdown /a``) however the run ends, also after a crash. Progress is appended to ``runs/rehearsal_log.txt``.
 
-``--arch resnet18`` switches to the one-seed architecture check (VGG-16 vs ResNet-18 for SNGP and DDU), with its own
+``--candidates no`` drops the candidate jobs. ``--arch resnet18`` switches to the one-seed architecture check (VGG-16 vs ResNet-18 for SNGP and DDU), with its own
 default ``--runs runs_resnet18`` and ``--out results_resnet18`` and seed 0 only: train ``base``, ``dropout``, ``dump_shift``,
 train ``ddu`` and ``sngp_scratch``, dump both, then ``check_sgr_path.py`` (output in ``runs_resnet18/check_sgr_path.txt``)::
 
@@ -57,6 +61,15 @@ GATE_CRITERIA = ("maxprob", "ds")
 SMOKE_SUBSET = 512
 SMOKE_SAMPLES = 3
 CHECK_CRITERIA = ("sr_base", "sr_dropout", "mc_maxprob", "ddu_maxprob", "ddu_density", "sngp_scratch_maxprob", "sngp_scratch_ds")
+CANDIDATES = ("subensemble", "masksembles", "deup")
+CANDIDATE_TRAIN = ("subensemble", "masksembles", "deup_base")
+# ddu_maxprob is only in the dumps if ddu was run (it is on the PC; the smoke queue has no ddu job, so it is skipped there).
+CANDIDATE_CRITERIA = (
+    "sr_base", "sr_dropout", "mc_maxprob", "mc_total", "ddu_maxprob",
+    "subensemble_maxprob", "subensemble_total", "subensemble_aleatoric", "subensemble_epistemic",
+    "masksembles_maxprob", "masksembles_total", "masksembles_aleatoric", "masksembles_epistemic",
+    "deup_maxprob", "deup_error",
+)
 
 
 @dataclass
@@ -203,18 +216,29 @@ class Queue:
 
         return Job(f"evaluate {out_sub}", "eval", done, run)
 
-    def check_job(self) -> Job:
-        """``check_sgr_path.py`` on the clean dumps (stdout also written to ``check_sgr_path.txt``); done if that file is newer than every dump."""
+    def check_job(
+        self,
+        filename: str = "check_sgr_path.txt",
+        criteria: tuple[str, ...] = CHECK_CRITERIA,
+        seeds: list[int] | None = None,
+        methods: tuple[str, ...] | None = None,
+    ) -> Job:
+        """``check_sgr_path.py`` on the clean dumps (stdout also written to ``runs/{filename}``).
+
+        Done if that file is newer than every dump (of ``methods`` if given, else of all methods).
+        """
         a = self.args
-        out_path = a.runs / "check_sgr_path.txt"
+        seeds = a.seeds if seeds is None else seeds
+        out_path = a.runs / filename
 
         def done() -> bool:
-            dumps = [f.stat().st_mtime for f in a.runs.glob("seed*/shift/**/*.npz")]
-            return out_path.exists() and out_path.stat().st_mtime >= max(dumps, default=0.0)
+            pattern = "seed*/shift/**/*.npz" if methods is None else "seed*/shift/{}/*.npz"
+            files = a.runs.glob(pattern) if methods is None else [f for m in methods for f in a.runs.glob(pattern.format(m))]
+            return out_path.exists() and out_path.stat().st_mtime >= max((f.stat().st_mtime for f in files), default=0.0)
 
         def run() -> int:
-            criteria = [c for c in CHECK_CRITERIA if a.sngp != "no" or not c.startswith("sngp")]
-            cmd = self.script_cmd("check_sgr_path.py", "--runs", a.runs, "--seeds", *a.seeds, "--criteria", *criteria)
+            crits = [c for c in criteria if a.sngp != "no" or not c.startswith("sngp")]
+            cmd = self.script_cmd("check_sgr_path.py", "--runs", a.runs, "--seeds", *seeds, "--criteria", *crits)
             self.log("+ " + " ".join(cmd))
             res = subprocess.run(cmd, capture_output=True, text=True, check=False)
             print(res.stdout, end="", flush=True)
@@ -223,7 +247,7 @@ class Queue:
                 out_path.write_text(res.stdout, encoding="utf-8")
             return res.returncode
 
-        return Job("check_sgr_path", "eval", done, run)
+        return Job(f"check_sgr_path -> {filename}", "eval", done, run)
 
     def build_arch_check_jobs(self) -> list[Job]:
         """Queue of the architecture check: base, dropout, ddu and sngp_scratch for the seeds, then ``check_sgr_path``."""
@@ -246,6 +270,10 @@ class Queue:
         sngp_rest = [s for s in seeds if s != 0]
         jobs = [self.train_job(stage, s) for s in seeds for stage in ("base", "dropout")]
         jobs.append(self.dump_job(None, seeds))
+        if a.candidates == "yes":  # seed 0 only; the later evaluations skip methods that lack a seed
+            jobs += [self.train_job(stage, 0) for stage in CANDIDATE_TRAIN]
+            jobs += [self.dump_job(m, [0]) for m in CANDIDATES]
+            jobs.append(self.check_job("check_candidates.txt", CANDIDATE_CRITERIA, [0], CANDIDATES))
         jobs += [self.train_job("sngp_scratch", 0, sngp_on), self.dump_job("sngp_scratch", [0], sngp_on)]
         if a.sngp == "auto":
             gate_path = run_dir(a.runs, 0) / "shift" / "sngp_scratch" / "cifar10.npz"
@@ -335,6 +363,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seeds", type=int, nargs="+", default=None, help="Default: 0-4 (vgg16), 0 (resnet18).")
     p.add_argument("--extra-bases", action="store_true", help="Also train base seeds 5-9 at the end (lowest priority).")
     p.add_argument("--sngp", choices=["auto", "yes", "no"], default="auto", help="auto: train SNGP for seeds > 0 only if the gate passes; no: skip SNGP (resnet18: no sngp_scratch at all).")
+    p.add_argument("--candidates", choices=["yes", "no"], default="yes", help="vgg16 only: first train, dump and check subensemble, masksembles and DEUP for seed 0.")
     p.add_argument("--runs", type=Path, default=None, help="Default: runs (runs_resnet18 for resnet18).")
     p.add_argument("--data-dir", type=Path, default=EXPERIMENT_DIR / "data")
     p.add_argument("--out", type=Path, default=None, help="Default: results (results_resnet18 for resnet18).")

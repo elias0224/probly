@@ -9,6 +9,8 @@ from probly.method.sngp import sngp
 from probly.method.swag import swag
 from probly.method.vbll import vbll
 from probly.transformation import dropout
+from probly.transformation.masksembles import masksembles
+from probly.transformation.subensemble import subensemble
 from probly_benchmark.resnet import BasicBlock, ResNet
 
 ARCHS = ("vgg16", "resnet18")
@@ -112,6 +114,20 @@ def to_sngp(
 def to_vbll(plain: nn.Module, parameterization: str = "dense") -> nn.Module:
     """Replace the last Linear layer by a variational Bayesian last layer (a fresh, untrained one)."""
     return vbll(plain, parameterization=parameterization)
+
+
+def to_subensemble(plain: nn.Module, num_heads: int = 5, head_layer: int = 4) -> nn.Module:
+    """Apply probly's subensemble transformation: a shared frozen trunk and ``num_heads`` freshly initialized heads.
+
+    ``head_layer=4`` makes the head the fc block after the last conv block and Flatten (Linear, ReLU, BatchNorm1d,
+    Linear) of the VGG; the result is an ``nn.ModuleList`` of ``Sequential(frozen_trunk, head_i)``.
+    """
+    return subensemble(plain, num_heads=num_heads, head_layer=head_layer, reset_params=True)
+
+
+def to_masksembles(plain: nn.Module, num_masks: int = 4, scale: float = 2.0) -> nn.Module:
+    """Apply probly's Masksembles transformation (fixed channel masks after each conv and each Linear but the first/last)."""
+    return masksembles(plain, num_masks=num_masks, scale=scale, predictor_type="logit_classifier")
 
 
 def disable_dropout(model: nn.Module) -> nn.Module:

@@ -35,6 +35,25 @@ def load_cifar10(data_dir: Path, *, train: bool, device: torch.device | str = "c
     return x.to(device), y.to(device)
 
 
+DEUP_SPLIT_SEED = 12345  # fixed, independent of the training seed, so every script sees the same split
+DEUP_HOLDOUT = 5000
+
+
+def deup_split(n: int, holdout: int = DEUP_HOLDOUT) -> tuple[np.ndarray, np.ndarray]:
+    """Fixed split of ``n`` training indices into the DEUP training part and the held-out part for the error head.
+
+    Args:
+        n: Number of training instances (50000 for CIFAR-10).
+        holdout: Size of the held-out part; capped at ``n // 10`` (at least 1) for tiny ``n`` in smoke runs.
+
+    Returns:
+        ``(train_idx, holdout_idx)``, both from one permutation made with ``default_rng(12345)``.
+    """
+    holdout = max(1, min(holdout, n // 10))
+    perm = np.random.default_rng(DEUP_SPLIT_SEED).permutation(n)
+    return perm[: n - holdout], perm[n - holdout :]
+
+
 def normalize(x: torch.Tensor) -> torch.Tensor:
     """Convert uint8 images to float in ``[0, 1]`` and apply the CIFAR-10 normalization."""
     mean = torch.tensor(MEAN, device=x.device).view(1, 3, 1, 1)

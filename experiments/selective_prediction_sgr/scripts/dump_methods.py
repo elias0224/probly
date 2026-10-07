@@ -2,7 +2,10 @@
 
 Writes ``runs/seed{S}/shift/{method}/{dataset}.npz`` (labels, mean probabilities and the method's criteria) for the
 methods finetune, swag, laplace, gda, ddu, vbll and sngp (plus the SNGP variants sngp_long and sngp_scratch and dropout_scratch, MC dropout trained from scratch with
-the deterministic eval-mode softmax ``softmax_det`` next to the MC criteria); finished files
+the deterministic eval-mode softmax ``softmax_det`` next to the MC criteria). The candidate methods subensemble and
+masksembles dump the sample criteria (maxprob, total, aleatoric, epistemic); deup wraps ``deup_base.pt`` (trained on
+the 45k split of ``deup_split``) in probly's DEUP and fits the error head on the 5k held-out images at dump time
+(criteria maxprob and ``error``). Finished files
 are skipped. SWAG, DDU, VBLL, SNGP and finetune need the weights from ``train.py``; Laplace and the density heads of GDA and DDU are cheap and refit on the training set at the
 start of every run that has something left to dump.
 """
@@ -26,16 +29,28 @@ from torch.utils.data import DataLoader, TensorDataset
 from laplace import Laplace
 from probly.layers.torch import GaussianMixtureHead
 from probly.method.ddu import negative_log_density
+from probly.method.deup import deup
 from probly.predictor import predict as probly_predict
 from probly.quantification import quantify
 from probly.representer import representer
-from sgr_experiment.data import load_cifar10, normalize
-from sgr_experiment.loaders import load_base, load_ddu, load_dropout, load_finetune, load_sngp, load_swag, load_vbll
+from sgr_experiment.data import deup_split, load_cifar10, normalize
+from sgr_experiment.loaders import (
+    load_base,
+    load_ddu,
+    load_deup_base,
+    load_dropout,
+    load_finetune,
+    load_masksembles,
+    load_sngp,
+    load_subensemble,
+    load_swag,
+    load_vbll,
+)
 from sgr_experiment.model import ARCHS, disable_dropout
-from sgr_experiment.uncertainty import summarize_samples, torch_one_minus_max
+from sgr_experiment.uncertainty import member_representation, summarize_samples, torch_one_minus_max
 from sgr_experiment.utils import EXPERIMENT_DIR, get_device, run_dir, seed_everything
 
-METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp", "sngp_long", "sngp_scratch", "dropout_scratch"]
+METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp", "sngp_long", "sngp_scratch", "dropout_scratch", "subensemble", "masksembles", "deup"]
 NEEDS = {
     "finetune": "finetune.pt",
     "swag": "swag.pt",
@@ -47,6 +62,9 @@ NEEDS = {
     "sngp_long": "sngp_long.pt",
     "sngp_scratch": "sngp_scratch.pt",
     "dropout_scratch": "dropout_scratch.pt",
+    "subensemble": "subensemble.pt",
+    "masksembles": "masksembles.pt",
+    "deup": "deup_base.pt",
 }
 Predict = Callable[[torch.Tensor], dict[str, np.ndarray]]
 
@@ -79,6 +97,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--sngp-norm-multiplier", type=float, default=6.0)
     p.add_argument("--sngp-init-std", type=float, default=0.05)
     p.add_argument("--sngp-momentum", type=float, default=-1.0)
+    p.add_argument("--num-heads", type=int, default=5, help="Heads of the subensemble (must match training).")
+    p.add_argument("--head-layer", type=int, default=4, help="Layers in each subensemble head (must match training).")
+    p.add_argument("--num-masks", type=int, default=4, help="Masks of masksembles (must match training).")
+    p.add_argument("--mask-scale", type=float, default=2.0, help="Mask scale of masksembles (must match training).")
+    p.add_argument("--deup-epochs", type=int, default=100, help="Epochs of the DEUP error head on the held-out images.")
     return p.parse_args()
 
 
@@ -247,6 +270,93 @@ def build_dropout_scratch(seed: int, args: argparse.Namespace, device: torch.dev
     return predict
 
 
+def build_subensemble(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:  # noqa: ARG001
+    """Subensemble (shared frozen trunk, trained heads) via the probly representer; one sample per head.
+
+    The representer returns the raw head logits ``(n, classes, heads)`` as a sample (not a categorical), so softmax and move heads first.
+    """
+    model = load_subensemble(run_dir(args.runs, seed) / "subensemble.pt", args.num_heads, args.head_layer, args.arch).to(device)
+    rep = representer(model)
+    return lambda x: summarize_samples(member_representation(rep.represent(x).tensor.softmax(1).permute(2, 0, 1)))
+
+
+def build_masksembles(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:  # noqa: ARG001
+    """Masksembles via the probly representer (it tiles the batch once per mask; one sample per mask)."""
+    model = load_masksembles(run_dir(args.runs, seed) / "masksembles.pt", args.num_masks, args.mask_scale, args.arch).to(device)
+    rep = representer(model)
+    return lambda x: summarize_samples(rep.represent(x))
+
+
+def build_deup(seed: int, args: argparse.Namespace, device: torch.device, train: tuple) -> Predict:  # noqa: ARG001
+    """DEUP: the plain ``deup_base`` network, stationarizing features fitted on the 45k training split, error head on the 5k held-out images.
+
+    The providers are ``log_gmm_density`` (class-conditional Gaussians on the 512-dim encoder features) and
+    ``log_mc_dropout_variance`` (variance of the softmax under feature dropout through the frozen last Linear). The
+    default ``log_maf_density`` and ``log_due_variance`` are not used: ``log_due_variance`` requires a spectral-norm
+    encoder (sn_coeff 3.0), which the plainly trained ``deup_base`` does not have, and ``log_maf_density`` needs nflows.
+    The error head regresses ``log10`` of the per-sample cross-entropy of the frozen classifier (MSE), as in
+    ``examples/method/plot_deup.py``. The criteria are ``maxprob`` of the softmax and ``error`` (the predicted loss).
+    """
+    base = load_deup_base(run_dir(args.runs, seed) / "deup_base.pt", args.arch)
+    model = deup(
+        base,
+        hidden_size=256,
+        n_hidden_layers=3,
+        stationarizing_features=["log_gmm_density", "log_mc_dropout_variance"],
+        predictor_type="logit_classifier",
+    ).to(device)
+    # Unlike dumps from other methods this does not use ``train`` (the first N training images): it needs the split.
+    x_all, y_all = load_cifar10(args.data_dir, train=True, device="cpu")
+    tr_idx, ho_idx = deup_split(len(y_all))
+    if args.subset:
+        tr_idx, ho_idx = tr_idx[: args.subset], ho_idx[: args.subset]
+    tr_idx, ho_idx = torch.from_numpy(tr_idx), torch.from_numpy(ho_idx)
+    x_tr, y_tr = normalize(x_all[tr_idx]).to(device), y_all[tr_idx].to(device)
+    x_ho, y_ho = normalize(x_all[ho_idx]).to(device), y_all[ho_idx].to(device)
+    for p in list(model.encoder.parameters()) + list(model.classification_head.parameters()):
+        p.requires_grad_(False)
+    model.eval()
+    loader = DataLoader(TensorDataset(x_tr, y_tr), batch_size=args.batch_size)
+    for provider in model.providers:
+        provider.to(device)
+        provider.fit(model.encoder, model.classification_head, loader, device)
+    # The MinMax scalers are fitted on the training split, so held-out features can leave [0, 1]; clamp, as plot_deup.py does.
+    phi_fn = model._compute_stationarizing_features  # noqa: SLF001
+    model._compute_stationarizing_features = lambda *a: phi_fn(*a).clamp(-10.0, 10.0)  # noqa: SLF001
+    phis, targets = [], []
+    with torch.no_grad():
+        for start in range(0, len(y_ho), args.batch_size):
+            feats = model.encoder(x_ho[start : start + args.batch_size])
+            logits = model.classification_head(feats).float()
+            phis.append(model._compute_stationarizing_features(feats, logits))  # noqa: SLF001
+            ce = nn.functional.cross_entropy(logits, y_ho[start : start + args.batch_size], reduction="none")
+            targets.append(torch.log10(ce.clamp(min=1e-10)).clamp(min=-5.0))
+    phi, target = torch.cat(phis), torch.cat(targets)
+    g = torch.Generator().manual_seed(seed)
+    opt = torch.optim.Adam(model.error_head.parameters(), lr=1e-3)
+    model.error_head.train()
+    for _ in range(args.deup_epochs):
+        for idx in torch.randperm(len(target), generator=g).split(128):
+            idx = idx.to(device)
+            loss = nn.functional.mse_loss(model.error_head(phi[idx]).reshape(-1), target[idx])
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+    model.error_head.eval()
+    with torch.no_grad():
+        mse = nn.functional.mse_loss(model.error_head(phi).reshape(-1), target).item()
+    print(f"deup: error head fitted on {len(target)} held-out images, mse {mse:.4f} (target variance {target.var().item():.4f})", flush=True)
+    rep = representer(model)
+
+    def predict(x: torch.Tensor) -> dict[str, np.ndarray]:
+        r = rep.represent(x)
+        out = softmax_dict(torch.log(r.softmax.probabilities))
+        out["error"] = r.error_score.detach().float().reshape(-1).cpu().numpy()
+        return out
+
+    return predict
+
+
 BUILDERS = {
     "finetune": build_finetune,
     "swag": build_swag,
@@ -258,6 +368,9 @@ BUILDERS = {
     "sngp_long": partial(build_sngp, checkpoint="sngp_long.pt"),
     "sngp_scratch": partial(build_sngp, checkpoint="sngp_scratch.pt"),
     "dropout_scratch": build_dropout_scratch,
+    "subensemble": build_subensemble,
+    "masksembles": build_masksembles,
+    "deup": build_deup,
 }
 
 

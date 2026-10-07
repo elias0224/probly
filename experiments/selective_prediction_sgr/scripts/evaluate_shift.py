@@ -64,8 +64,11 @@ _METHOD_STYLE = {
     "sngp_long": ("SNGP 50-ep fine-tune", "#66bb6a"),
     "sngp_scratch": ("SNGP from scratch", "#1b5e20"),
     "dropout_scratch": ("MC dropout from scratch", "#ff8f00"),
+    "subensemble": ("Subensemble (5 heads)", "#6d4c41"),
+    "masksembles": ("Masksembles (4 masks)", "#d81b60"),
+    "deup": ("DEUP", "#00897b"),
 }
-_QUANTITY_LS = {"maxprob": "-", "total": ":", "aleatoric": "-.", "epistemic": "--", "density": "--", "ds": "--", "sr": "--"}
+_QUANTITY_LS = {"maxprob": "-", "total": ":", "aleatoric": "-.", "epistemic": "--", "density": "--", "ds": "--", "sr": "--", "error": "--"}
 # keys of the method npz files that become criteria (``{method}_{key}``)
 METHOD_KEYS = {
     "finetune": ["maxprob"],
@@ -78,6 +81,11 @@ METHOD_KEYS = {
     "sngp_long": ["maxprob", "ds"],
     "sngp_scratch": ["maxprob", "ds"],
     "dropout_scratch": ["sr", "maxprob", "total", "aleatoric", "epistemic"],
+    # Candidates (seed 0 only): load_dataset skips a method unless every requested seed has its dump, so the
+    # seeds 0-4 evaluations ignore them and only check_sgr_path --seeds 0 scores them.
+    "subensemble": ["maxprob", "total", "aleatoric", "epistemic"],
+    "masksembles": ["maxprob", "total", "aleatoric", "epistemic"],
+    "deup": ["maxprob", "error"],
 }
 for _m, _keys in METHOD_KEYS.items():
     for _k in _keys:

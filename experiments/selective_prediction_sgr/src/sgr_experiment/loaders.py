@@ -15,7 +15,16 @@ from pathlib import Path
 import torch
 from torch import nn
 
-from sgr_experiment.model import build_plain, to_ddu, to_mc_dropout, to_sngp, to_swag, to_vbll
+from sgr_experiment.model import (
+    build_plain,
+    to_ddu,
+    to_masksembles,
+    to_mc_dropout,
+    to_sngp,
+    to_subensemble,
+    to_swag,
+    to_vbll,
+)
 
 
 def _load_state(path: str | Path) -> dict:
@@ -84,3 +93,25 @@ def load_vbll(path: str | Path, parameterization: str = "dense", arch: str = "vg
     model = to_vbll(build_plain(arch), parameterization=parameterization)
     model.load_state_dict(_load_state(path))
     return model.eval()
+
+
+def load_subensemble(path: str | Path, num_heads: int = 5, head_layer: int = 4, arch: str = "vgg16") -> nn.Module:
+    """Load the subensemble from ``subensemble.pt`` (frozen trunk plus trained heads), in eval mode on the CPU."""
+    model = to_subensemble(build_plain(arch), num_heads=num_heads, head_layer=head_layer)
+    model.load_state_dict(_load_state(path))
+    return model.eval()
+
+
+def load_masksembles(path: str | Path, num_masks: int = 4, scale: float = 2.0, arch: str = "vgg16") -> nn.Module:
+    """Load the Masksembles model from ``masksembles.pt`` (the masks are buffers in the state dict), in eval mode on the CPU.
+
+    In eval mode the input batch must be tiled ``num_masks`` times (use probly's ``representer``).
+    """
+    model = to_masksembles(build_plain(arch), num_masks=num_masks, scale=scale)
+    model.load_state_dict(_load_state(path))
+    return model.eval()
+
+
+def load_deup_base(path: str | Path, arch: str = "vgg16") -> nn.Module:
+    """Load the plain network trained on the DEUP training split from ``deup_base.pt``, in eval mode on the CPU."""
+    return load_base(path, arch)

@@ -8,6 +8,12 @@ normalization and a random-feature Gaussian process last layer; the precision ma
 Two SNGP variants test whether the short fine-tune limits SNGP: "sngp_long" fine-tunes base with the 50-epoch budget
 of finetune/dropout, and "sngp_scratch" trains SNGP from a fresh VGG with the base schedule (no ``base.pt`` needed).
 Likewise "dropout_scratch" trains the VGG with probly's MC dropout from scratch with the base schedule.
+Candidate methods: "subensemble" builds probly's subensemble from ``base.pt`` (frozen trunk up to and including Flatten,
+5 fresh fc-block heads, trained on the sum of the per-head cross-entropies; the trunk stays in eval mode), "masksembles"
+trains probly's Masksembles from scratch with the base schedule (training draws one random mask per sample, so an epoch
+costs about as much as base; only evaluation tiles the batch by the number of masks), and "deup_base" trains the plain VGG
+from scratch on the 45k-image DEUP training split (``deup_split``); the 5k held-out images are used by dump_methods to
+fit the DEUP error head.
 
 ``--deadline`` (unix timestamp) stops training cleanly after the epoch that ends past it (exit code 75, the checkpoint
 ``last_{stage}.pt`` is complete); rerunning the same command resumes.
@@ -31,9 +37,19 @@ from probly.losses import vbll_loss
 from probly.method.swag import collect_swag
 from probly.method.sngp import reset_precision_matrix
 from probly.method.vbll import find_vbll_layer
-from sgr_experiment.data import load_cifar10, normalize, train_batches
+from sgr_experiment.data import deup_split, load_cifar10, normalize, train_batches
 from sgr_experiment.loaders import load_base
-from sgr_experiment.model import ARCHS, build_plain, to_ddu, to_mc_dropout, to_sngp, to_swag, to_vbll
+from sgr_experiment.model import (
+    ARCHS,
+    build_plain,
+    to_ddu,
+    to_masksembles,
+    to_mc_dropout,
+    to_sngp,
+    to_subensemble,
+    to_swag,
+    to_vbll,
+)
 from sgr_experiment.utils import EXPERIMENT_DIR, get_device, run_dir, seed_everything
 
 
@@ -49,10 +65,17 @@ DEFAULTS = {
     "sngp_long": (50, 0.01, 10),
     "sngp_scratch": (250, 0.1, 25),
     "dropout_scratch": (250, 0.1, 25),
+    "subensemble": (20, 0.01, 10),  # same fine-tune schedule as ddu/vbll/sngp; only the heads train
+    "masksembles": (250, 0.1, 25),
+    "deup_base": (250, 0.1, 25),
 }
 EXIT_DEADLINE = 75  # stopped for the time budget, resume later
 SNGP_STAGES = ("sngp", "sngp_long", "sngp_scratch")
 KL_WEIGHT = 1.0 / 50000  # VBLL: 1 / training set size
+NUM_HEADS = 5  # subensemble
+HEAD_LAYER = 4  # subensemble: Linear, ReLU, BatchNorm1d, Linear after Flatten
+NUM_MASKS = 4  # masksembles
+MASK_SCALE = 2.0
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,12 +84,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--arch", choices=ARCHS, default="vgg16", help="Network; a runs directory holds one arch only (checked).")
     p.add_argument("--stage", choices=list(DEFAULTS), default="base")
-    p.add_argument("--epochs", type=int, default=None, help="Default: 250 (base, sngp_scratch, dropout_scratch), 50 (dropout, finetune, sngp_long), 20 (others).")
+    p.add_argument("--epochs", type=int, default=None, help="Default: 250 (base, sngp_scratch, dropout_scratch, masksembles, deup_base), 50 (dropout, finetune, sngp_long), 20 (others).")
     p.add_argument("--out", type=Path, default=EXPERIMENT_DIR / "runs")
     p.add_argument("--data-dir", type=Path, default=EXPERIMENT_DIR / "data")
     p.add_argument("--batch-size", type=int, default=128)
-    p.add_argument("--lr", type=float, default=None, help="Default: 0.1 (base, sngp_scratch, dropout_scratch) or 0.01 (others).")
-    p.add_argument("--step-size", type=int, default=None, help="Halve the lr every this many epochs. Default: 25 (base, sngp_scratch, dropout_scratch), constant (swag), else 10.")
+    p.add_argument("--lr", type=float, default=None, help="Default: 0.1 (base, sngp_scratch, dropout_scratch, masksembles, deup_base) or 0.01 (others).")
+    p.add_argument("--step-size", type=int, default=None, help="Halve the lr every this many epochs. Default: 25 (the 250-epoch stages), constant (swag), else 10.")
     p.add_argument("--p", type=float, default=0.5, help="Dropout probability of the inserted layers (stages dropout, dropout_scratch).")
     p.add_argument("--swag-start", type=int, default=5, help="First epoch (1-based) after which SWAG collects a snapshot.")
     p.add_argument("--swag-max-rank", type=int, default=20)
@@ -112,6 +135,12 @@ def logits_of(stage: str, model: nn.Module, x: torch.Tensor) -> torch.Tensor:
         return model.classification_head(model.encoder(x))
     if stage == "vbll" or stage in SNGP_STAGES:
         return model(x)[0]
+    if stage == "subensemble":  # log of the mean softmax over the heads, so argmax is the ensemble prediction
+        return torch.stack([m(x).float().softmax(-1) for m in model]).mean(0).clamp_min(1e-12).log()
+    if stage == "masksembles" and not model.training:  # eval mode wants the batch tiled once per mask
+        n, b = int(model.num_masks), x.shape[0]
+        out = model(torch.tile(x, (n,) + (1,) * (x.dim() - 1))).float().view(n, b, -1)
+        return out.softmax(-1).mean(0).clamp_min(1e-12).log()
     return model(x)
 
 
@@ -164,6 +193,10 @@ def main() -> None:
         model = to_mc_dropout(build_plain(args.arch), p=args.p)
     elif args.stage == "sngp_scratch":
         model = to_sngp(build_plain(args.arch), **sngp_kwargs)
+    elif args.stage == "deup_base":
+        model = build_plain(args.arch)
+    elif args.stage == "masksembles":
+        model = to_masksembles(build_plain(args.arch), num_masks=NUM_MASKS, scale=MASK_SCALE)
     else:
         base_path = out / "base.pt"
         if not base_path.exists():
@@ -178,6 +211,7 @@ def main() -> None:
             "vbll": lambda: to_vbll(base, parameterization=args.vbll_parameterization),
             "sngp": lambda: to_sngp(base, **sngp_kwargs),
             "sngp_long": lambda: to_sngp(base, **sngp_kwargs),
+            "subensemble": lambda: to_subensemble(base, num_heads=NUM_HEADS, head_layer=HEAD_LAYER),
         }[args.stage]()
     # No channels-last: it was 4-5x slower for this network on an RTX 2070 Super (see scripts/bench.py).
     model = model.to(device)
@@ -188,8 +222,8 @@ def main() -> None:
         # No weight decay on the variational parameters: it would shrink the posterior covariance parameters.
         rest = [p for p in model.parameters() if all(p is not q for q in vbll_layer.parameters())]
         groups = [{"params": rest}, {"params": list(vbll_layer.parameters()), "weight_decay": 0.0}]
-    else:
-        groups = [{"params": list(model.parameters())}]
+    else:  # subensemble: the frozen trunk has requires_grad False and is left out
+        groups = [{"params": [p for p in model.parameters() if p.requires_grad]}]
     opt = torch.optim.SGD(groups, lr=args.lr, momentum=0.9, weight_decay=5e-4)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=args.step_size, gamma=0.5)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
@@ -210,6 +244,9 @@ def main() -> None:
 
     # The whole dataset lives on the device and is augmented there, so no DataLoader workers are needed.
     x_train, y_train = load_cifar10(args.data_dir, train=True, device=device)
+    if args.stage == "deup_base":  # train on the fixed 45k split; the 5k held-out images stay unseen
+        keep = torch.from_numpy(deup_split(len(y_train))[0]).to(device)
+        x_train, y_train = x_train[keep], y_train[keep]
     if args.subset is not None and args.subset < len(y_train):
         idx = torch.from_numpy(np.random.default_rng(args.seed).permutation(len(y_train))[: args.subset]).to(device)
         x_train, y_train = x_train[idx], y_train[idx]
@@ -242,6 +279,8 @@ def main() -> None:
                     if args.stage == "vbll":
                         model(x)
                         loss = vbll_loss(vbll_layer, vbll_features["x"], y, KL_WEIGHT)
+                    elif args.stage == "subensemble":  # sum of the per-head cross-entropies
+                        loss = sum(loss_fn(m(x).float(), y) for m in model)
                     else:
                         loss = loss_fn(logits_of(args.stage, model, x), y)
                 scaler.scale(loss).backward()
@@ -305,6 +344,9 @@ def main() -> None:
         if args.stage in SNGP_STAGES
         else None,
         "vbll_parameterization": args.vbll_parameterization if args.stage == "vbll" else None,
+        "subensemble": {"num_heads": NUM_HEADS, "head_layer": HEAD_LAYER} if args.stage == "subensemble" else None,
+        "masksembles": {"num_masks": NUM_MASKS, "scale": MASK_SCALE} if args.stage == "masksembles" else None,
+        "deup_split": {"holdout": len(deup_split(50000)[1]), "seed": 12345} if args.stage == "deup_base" else None,
         "subset": args.subset,
         "test_acc": acc,
         "git_commit": commit,
