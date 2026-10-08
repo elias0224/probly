@@ -27,6 +27,7 @@ import torch  # noqa: E402
 from probly.selective_prediction import CoverageSelector, SGRSelector  # noqa: E402
 from sgr_experiment.metrics import (  # noqa: E402
     apply_threshold,
+    augrc,
     aurc,
     auroc,
     e_aurc,
@@ -228,6 +229,7 @@ def run_protocol(data: dict[str, dict], n_splits: int, split_seed: int, delta: f
             for si, perm in enumerate(splits):
                 sel, test = perm[:half], perm[half:]
                 acc["aurc", c].append(aurc(crit[test], loss[test]) * 1000)
+                acc["augrc", c].append(augrc(crit[test], loss[test]) * 1000)
                 acc["eaurc", c].append(e_aurc(crit[test], loss[test]) * 1000)
                 acc["acc", c].append(1 - loss[test].mean())
                 for d in ood_c:
@@ -307,9 +309,9 @@ def build_tables(acc: dict, data: dict[str, dict], out: Path, n_seeds: int, n_sp
     shifted = [d for d in SHIFT_DATASETS if d in data]
     crits = active_criteria(data)
     t.add(
-        "id_aurc", "a) ID: AURC and E-AURC (x1000, lower is better) and accuracy", ["criterion"],
-        [([c], [("aurc", c), ("eaurc", c), ("acc", c)]) for c in crits],
-        [{"header": "AURC x1000", "digits": 2, "mode": "ms"}, {"header": "E-AURC x1000", "digits": 2, "mode": "ms"}, {"header": "accuracy", "digits": 4, "mode": "ms"}],
+        "id_aurc", "a) ID: AURC, AUGRC and E-AURC (x1000, lower is better) and accuracy", ["criterion"],
+        [([c], [("aurc", c), ("augrc", c), ("eaurc", c), ("acc", c)]) for c in crits],
+        [{"header": "AURC x1000", "digits": 2, "mode": "ms"}, {"header": "AUGRC x1000", "digits": 2, "mode": "ms"}, {"header": "E-AURC x1000", "digits": 2, "mode": "ms"}, {"header": "accuracy", "digits": 4, "mode": "ms"}],
         acc,
     )
     t.add(

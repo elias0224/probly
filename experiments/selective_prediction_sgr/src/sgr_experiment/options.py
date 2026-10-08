@@ -15,6 +15,8 @@ import math
 import numpy as np
 from scipy import stats
 
+_EPS = 1e-12
+
 
 def candidate_thresholds(crit: np.ndarray, grid_size: int = 100) -> np.ndarray:
     """Label-free candidate thresholds: quantiles of the criterion at coverage levels ``1/G, 2/G, ..., 1``.
@@ -125,6 +127,86 @@ def ltt_fixed_sequence_threshold(
     if not valid.any():
         return -math.inf
     return float(thresholds[last[valid].max()])
+
+
+def _prefix_errors(crit: np.ndarray, loss: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Sorted criterion, cumulative errors and the 1-based accepted count at the end of each tie group."""
+    crit = np.asarray(crit, dtype=np.float64)
+    order = np.argsort(crit, kind="stable")
+    c = crit[order]
+    cum = np.cumsum(np.asarray(loss, dtype=np.float64)[order])
+    ends = np.flatnonzero(np.append(c[1:] != c[:-1], True))
+    return c[ends], cum[ends], ends + 1
+
+
+def _bounds(cum: np.ndarray, m: np.ndarray, delta: float) -> np.ndarray:
+    """Clopper-Pearson bound ``risk_bound`` for ``cum`` errors among ``m`` accepted, vectorized."""
+    k = np.rint(cum)
+    out = np.ones(len(k))
+    ok = k < m
+    out[ok] = stats.beta.ppf(1 - delta, k[ok] + 1, m[ok] - k[ok])
+    return out
+
+
+def _groups_at_coverages(m: np.ndarray, n: int, coverages: np.ndarray) -> np.ndarray:
+    """Smallest tie group whose accepted set covers at least each coverage (at least one point)."""
+    need = np.maximum(1, np.ceil(coverages * n - 1e-9))
+    return np.minimum(np.searchsorted(m, need), len(m) - 1)
+
+
+def fixed_sequence_split_threshold(
+    crit: np.ndarray,
+    loss: np.ndarray,
+    risk: float,
+    delta: float,
+    rng: np.random.Generator,
+    pilot: float = 0.2,
+    margin: float = 0.1,
+    step: float = 0.01,
+) -> float:
+    """Fixed-sequence threshold whose start is chosen on an independent pilot split.
+
+    The calibration data is split at random into a pilot part (fraction ``pilot``) and a test part. On the pilot
+    part the plug-in start is the largest coverage ``c`` whose pilot risk would be certified by the test part, i.e.
+    ``risk_bound(round(pilot_risk(c) * c * n_test), round(c * n_test), delta) <= risk``; the start is
+    ``max(step, c - margin)``, or ``step`` if no ``c`` qualifies. The test part alone then runs fixed-sequence
+    testing at the full ``delta`` over the coverages ``start, start + step, ...`` (at most 1) and stops at the first
+    coverage whose bound exceeds ``risk``.
+
+    The order of the hypotheses depends only on the pilot part, which is disjoint from the test part, so
+    fixed-sequence testing on the test part controls the family-wise error at ``delta``: with probability at least
+    ``1 - delta`` the true selective risk of the returned threshold is at most ``risk``. ``pilot``, ``margin`` and
+    ``step`` must be fixed a priori, not tuned on the test part.
+
+    Args:
+        crit: Criterion on the calibration data, shape ``(n,)``; lower means more confident.
+        loss: Zero-one loss per instance, shape ``(n,)``.
+        risk: Desired risk ``r*``.
+        delta: Confidence parameter of the guarantee.
+        rng: Generator drawing the pilot/test split.
+        pilot: Fraction of the data used for the pilot part.
+        margin: Coverage subtracted from the plug-in start to make the start conservative.
+        step: Coverage step of the sequence.
+
+    Returns:
+        The threshold (accept if ``crit <= threshold``) of the last passed coverage, or ``-inf`` if the start fails.
+    """
+    crit = np.asarray(crit, dtype=np.float64)
+    loss = np.asarray(loss, dtype=np.float64)
+    perm = rng.permutation(len(crit))
+    n_pilot = max(1, round(pilot * len(crit)))
+    pi, ti = perm[:n_pilot], perm[n_pilot:]
+    n_test = len(ti)
+    pc, pcum, pm = _prefix_errors(crit[pi], loss[pi])
+    p_cov = pm / n_pilot
+    certified = _bounds(pcum / pm * p_cov * n_test, np.rint(p_cov * n_test), delta) <= risk + _EPS
+    start = max(step, float(p_cov[np.flatnonzero(certified)[-1]]) - margin) if certified.any() else step
+    tc, tcum, tm = _prefix_errors(crit[ti], loss[ti])
+    covs = np.arange(start, 1 + 1e-9, step)
+    groups = _groups_at_coverages(tm, n_test, covs)
+    failed = np.flatnonzero(_bounds(tcum[groups], tm[groups], delta) > risk + _EPS)
+    last = (failed[0] if failed.size else len(covs)) - 1
+    return float(tc[groups[last]]) if last >= 0 else -math.inf
 
 
 def conformal_qhat(cal_scores: np.ndarray, alpha: float) -> float:

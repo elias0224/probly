@@ -91,6 +91,20 @@ def aurc(criterion: np.ndarray, losses: np.ndarray) -> float:
     return float(_group_risks(criterion, losses).mean())
 
 
+def augrc(criterion: np.ndarray, losses: np.ndarray) -> float:
+    """Area under the generalized risk-coverage curve (Traub et al., 2024, arXiv 2407.01032); lower is better.
+
+    The generalized risk at an acceptance step is the number of errors among the accepted instances divided by ``n``
+    (selective risk times coverage). Ties are handled as in :func:`aurc`: every instance of a tie group gets the
+    risk and coverage of the group.
+    """
+    c = np.sort(np.asarray(criterion, dtype=np.float64))
+    group_end = np.flatnonzero(np.append(c[1:] != c[:-1], True))
+    group_id = np.cumsum(np.append(False, c[1:] != c[:-1]))
+    coverage = ((group_end + 1) / len(c))[group_id]
+    return float((_group_risks(criterion, losses) * coverage).mean())
+
+
 def e_aurc(criterion: np.ndarray, losses: np.ndarray) -> float:
     """Excess AURC: :func:`aurc` minus the AURC of the optimal ranking (lowest losses first) for the same losses."""
     losses = np.asarray(losses, dtype=np.float64)

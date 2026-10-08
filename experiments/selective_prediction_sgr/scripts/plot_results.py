@@ -33,7 +33,7 @@ import numpy as np  # noqa: E402
 
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
-MODES = ["emp", "sgr", "cov", "LTT Bonf", "LTT FS", "Chow raw", "Chow TS", "Conf LAC", "Conf APS"]
+MODES = ["emp", "sgr", "cov", "LTT Bonf", "LTT FS", "FS split", "Chow raw", "Chow TS", "Conf LAC", "Conf APS"]
 CORRUPTIONS = ["contrast", "gaussian_blur", "gaussian_noise", "pixelate"]
 SPECIAL_METHODS = {"sr_base": "sr_base", "sr_dropout": "sr_dropout", "swa_maxprob": "swa"}
 VARIANT_METHODS = ("sngp_long", "sngp_scratch", "dropout_scratch")  # method names that contain an underscore

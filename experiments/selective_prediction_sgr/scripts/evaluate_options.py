@@ -42,6 +42,7 @@ from sgr_experiment.metrics import apply_threshold, threshold_for_risk  # noqa: 
 from sgr_experiment.options import (  # noqa: E402
     aps_singleton_from_top_two,
     conformal_qhat,
+    fixed_sequence_split_threshold,
     lac_singleton_from_top_two,
     ltt_bonferroni_threshold,
     ltt_fixed_sequence_threshold,
@@ -57,13 +58,14 @@ MODE_INFO = {
     "cov": ("cov", "label-free CoverageSelector at the selection-half coverage of emp (reference)", "#bdbdbd"),
     "ltt_bonf": ("LTT Bonf", "Learn-then-Test (Angelopoulos et al., 2021), binomial p-values, Bonferroni over G candidates", "#e53935"),
     "ltt_fs": ("LTT FS", "Learn-then-Test with multi-start fixed-sequence testing, K starts walking up in coverage", "#fb8c00"),
+    "fs_split": ("FS split", "fixed-sequence testing on a random test part of the selection half at the full delta; the start comes from the independent pilot part (valid, no multiple starts)", "#d81b60"),
     "chow_raw": ("Chow raw", "Chow's rule (1970): ThresholdSelector(c = r*) on 1 - max prob, no fitting, no guarantee", "#43a047"),
     "chow_ts": ("Chow TS", "Chow's rule after temperature scaling fitted on the selection half", "#00897b"),
     "conf_lac": ("Conf LAC", "split conformal with the LAC score at alpha = r* (Sadinle et al., 2019), accept singleton sets", "#8e24aa"),
     "conf_aps": ("Conf APS", "split conformal with the non-randomized APS score at alpha = r*, accept singleton sets", "#5e35b1"),
 }
 ALL_MODES = list(MODE_INFO)
-THRESHOLD_MODES = {"emp", "sgr", "cov", "ltt_bonf", "ltt_fs"}
+THRESHOLD_MODES = {"emp", "sgr", "cov", "ltt_bonf", "ltt_fs", "fs_split"}
 PROB_MODES = {"chow_raw", "chow_ts", "conf_lac", "conf_aps"}
 # Criteria that have a probability source: 1 - max prob of sr_*, mc_maxprob, ens_maxprob, {method}_maxprob, swa_maxprob.
 PROB_CRITERIA = {c for c in CRITERIA if c.endswith("_maxprob") or c in ("sr_base", "sr_dropout", "dropout_scratch_sr")}
@@ -82,6 +84,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--delta", type=float, default=0.001, help="Confidence parameter of SGR and LTT.")
     p.add_argument("--grid-size", type=int, default=100, help="Number G of LTT candidate thresholds.")
     p.add_argument("--starts", type=int, default=10, help="Number K of fixed-sequence starts.")
+    p.add_argument("--fs-pilot", type=float, default=0.2, help="Pilot fraction of fs_split.")
+    p.add_argument("--fs-margin", type=float, default=0.1, help="Coverage margin subtracted from the pilot start of fs_split.")
     p.add_argument("--criteria", nargs="+", default=None, help="Criteria to evaluate (default: all active ones).")
     p.add_argument("--modes", nargs="+", default=ALL_MODES, choices=ALL_MODES, help="Modes to evaluate.")
     return p.parse_args()
@@ -233,6 +237,11 @@ def run_protocol(
                         thresholds["ltt_bonf"] = ltt_bonferroni_threshold(crit[sel], loss[sel], r, args.delta, args.grid_size)
                     if "ltt_fs" in mode_set:
                         thresholds["ltt_fs"] = ltt_fixed_sequence_threshold(crit[sel], loss[sel], r, args.delta, args.grid_size, args.starts)
+                    if "fs_split" in mode_set:
+                        fs_rng = np.random.default_rng([args.split_seed, u, si])
+                        thresholds["fs_split"] = fixed_sequence_split_threshold(
+                            crit[sel], loss[sel], r, args.delta, fs_rng, args.fs_pilot, args.fs_margin
+                        )
                     for mode in modes:
                         if mode in THRESHOLD_MODES:
                             rules[mode] = lambda name, idx, thr=thresholds[mode]: crit_of[name][idx] <= thr
@@ -254,17 +263,17 @@ def run_protocol(
     return acc, time.perf_counter() - t0
 
 
-def header_text(modes: list[str], n_seeds: int, args: argparse.Namespace) -> list[str]:
+def header_text(modes: list[str], n_seeds: int, args: argparse.Namespace, runs_name: str) -> list[str]:
     """Markdown header explaining the protocol and every mode."""
     lines = [
-        "# Choosing the accept/abstain rule (CIFAR-10 VGG-16)",
+        f"# Choosing the accept/abstain rule (CIFAR-10, runs: {runs_name})",
         "",
         f"{n_seeds} seeds x {args.n_splits} random 5k/5k splits of the clean test set; entries are mean +- std over all seed x",
         "split pairs. Every rule is fitted on the selection half and evaluated on the test half; shifted sets use the same",
         "test-half images, and the OOD share is measured on a random subset of as many OOD images as the test half. Ensemble",
         "criteria (`ens_*`) use the base models as members, so their spread comes from the random splits only. `viol` is the",
         f"share of seed x split pairs with test-half risk > r*. LTT uses delta = {args.delta}, G = {args.grid_size} candidates and",
-        f"K = {args.starts} fixed-sequence starts. `n/a` marks modes that need probabilities for criteria without any (entropies, density, ...).",
+        f"K = {args.starts} fixed-sequence starts; FS split uses a {args.fs_pilot:g} pilot fraction and a {args.fs_margin:g} start margin. `n/a` marks modes that need probabilities for criteria without any (entropies, density, ...).",
         "",
         "Modes:",
         "",
@@ -277,7 +286,8 @@ def header_text(modes: list[str], n_seeds: int, args: argparse.Namespace) -> lis
         "Candes, Jordan and Lei (2021), Learn then Test (LTT); Chow (1970), On optimum recognition error and reject tradeoff;",
         "Sadinle, Lei and Wasserman (2019), Least ambiguous set-valued classifiers with bounded error levels (LAC).",
         "LTT certifies the candidates of a label-free grid, so with probability >= 1 - delta the true risk of the returned rule is",
-        "<= r*. Chow's rule has no finite-sample guarantee: it is only as good as the calibration of the probabilities. Conformal",
+        "<= r*. FS split has the same guarantee: the order of its hypotheses depends only on the pilot part, so fixed-sequence",
+        "testing on the disjoint test part is valid at the full delta. Chow's rule has no finite-sample guarantee: it is only as good as the calibration of the probabilities. Conformal",
         "sets satisfy P(y not in set) <= alpha, hence P(error and accepted) <= alpha and the selective risk is <= alpha / coverage,",
         "a weaker guarantee than SGR and LTT. APS is the non-randomized version of probly's `aps_score`.",
         "",
@@ -310,7 +320,7 @@ def build_tables(acc: dict, data: dict[str, dict], crits: list[str], modes: list
                 specs += [{"header": f"{MODE_INFO[m][0]} risk", "digits": 4, "mode": "ms", "mark": r}, {"header": f"{MODE_INFO[m][0]} cov", "digits": 3, "mode": "mean"}]
             rows = [([str(s), c], [("shift", d, m, r, c, k) for m in modes for k in ("risk", "cov")]) for s, d in sets for c in crits]
             t.add(f"shift_{corruption}_r{r}", f"c) Shift: {corruption}, r* = {r} (* marks mean risk > r*)", ["severity", "criterion"], rows, specs, acc)
-    md = "\n".join(header_text(modes, n_seeds, args) + t.md)
+    md = "\n".join(header_text(modes, n_seeds, args, args.runs.resolve().name) + t.md)
     (out / "table.md").write_text(md + "\n", encoding="utf-8")
     return md
 

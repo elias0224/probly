@@ -12,7 +12,7 @@ selection-half coverage of the reference on the criterion's own selection half, 
 Differences to the reference are paired over the certified (unit, split) pairs.
 
 E4: for the method families with several scores, the same two quantities (at the reference's operating point) and the
-clean AURC, each against the family's own ``maxprob`` (SR) score.
+clean AURC and AUGRC, each against the family's own ``maxprob`` (SR) score.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from probly.selective_prediction import CoverageSelector  # noqa: E402
-from sgr_experiment.metrics import apply_threshold, aurc, coverage_at_risk  # noqa: E402
+from sgr_experiment.metrics import apply_threshold, augrc, aurc, coverage_at_risk  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
 R_GRID = [0.01, 0.02, 0.03, 0.05]
@@ -106,11 +106,13 @@ def evaluate_criterion(units: list, n_ref: int, labels: np.ndarray, splits: list
     res["own_cov"] = {r: nan_array(n_x, n_s) for r in R_GRID}
     res["own_cert"] = {r: nan_array(n_x, n_s) for r in R_GRID}
     res["aurc"] = nan_array(n_x, n_s)
+    res["augrc"] = nan_array(n_x, n_s)
     losses = [(pred != labels).astype(np.float64) for _, pred in units]
     for xu, (crit, _) in enumerate(units):
         for s, perm in enumerate(splits):
             sel, test = perm[:half], perm[half:]
             res["aurc"][xu, s] = aurc(crit[test], losses[xu][test])
+            res["augrc"][xu, s] = augrc(crit[test], losses[xu][test])
             for r in R_GRID:
                 thr, _ = sgr_selector_threshold(crit[sel], losses[xu][sel], r, delta)
                 certified = thr != -np.inf
@@ -198,9 +200,10 @@ def e4_rows(res: dict, fams: dict[str, tuple[str, list[str]]]) -> dict[tuple[str
         base_aurc = stats(res[base]["aurc"] * 1000)[0]
         for c in scores:
             a_mean, a_std = stats(res[c]["aurc"] * 1000)
+            g_mean, g_std = stats(res[c]["augrc"] * 1000)
             beats = True
             for r in R_GRID:
-                row = {"family": fam, "aurc": a_mean, "aurc_std": a_std}
+                row = {"family": fam, "aurc": a_mean, "aurc_std": a_std, "augrc": g_mean, "augrc_std": g_std}
                 row["d_rac"], row["d_rac_std"], row["b_rac"], row["n"] = paired(res[c]["rac"][r], res[base]["rac"][r], True)
                 row["d_car"], row["d_car_std"], row["b_car"], _ = paired(res[c]["car"][r], res[base]["car"][r], False)
                 rows[c, r] = row
@@ -255,7 +258,7 @@ def build_markdown(args: argparse.Namespace, ref: str, ref_note: str, ctx: dict,
         "# E4: scores per family",
         "",
         "Per family, every score against the family's `maxprob` (SR) score, at the reference's operating points above "
-        "(same certified pairs as E3). AURC x1000 is the mean +- std over unit x split test halves. A score beats SR if "
+        "(same certified pairs as E3). AURC x1000 and AUGRC x1000 (Traub et al., 2024) are the mean +- std over unit x split test halves; the gate uses AURC only. A score beats SR if "
         f"its mean delta risk @ ref cov is below 0 and it is better in more than half of the pairs at both r* "
         f"{VERDICT_RISKS[0]} and {VERDICT_RISKS[1]}, and its AURC is lower "
         "than the baseline's. Gate rule: a score is kept if it beats SR for at least one family on E3.",
@@ -266,10 +269,10 @@ def build_markdown(args: argparse.Namespace, ref: str, ref_note: str, ctx: dict,
         lines += [
             f"## Family `{fam}` (baseline `{base}`)",
             "",
-            "| score | AURC x1000 | "
+            "| score | AURC x1000 | AUGRC x1000 | "
             + " | ".join(f"d risk r*={r:.2f} | better | d cov r*={r:.2f} | better" for r in VERDICT_RISKS)
             + " | beats SR |",
-            "|---|---|" + "---|---|---|---|" * len(VERDICT_RISKS) + "---|",
+            "|---|---|---|" + "---|---|---|---|" * len(VERDICT_RISKS) + "---|",
         ]
         for c in scores:
             x = e4[c, VERDICT_RISKS[0]]
@@ -279,7 +282,7 @@ def build_markdown(args: argparse.Namespace, ref: str, ref_note: str, ctx: dict,
                 cells += [ms(y["d_rac"], y["d_rac_std"]), pct(y["b_rac"]), ms(y["d_car"], y["d_car_std"]), pct(y["b_car"])]
             is_base = c == base or c == f"{fam}_sr"
             verdict = "baseline" if is_base else ("yes" if x["beats"] else "no")
-            lines.append(f"| `{c}` | {ms(x['aurc'], x['aurc_std'], 3)} | " + " | ".join(cells) + f" | {verdict} |")
+            lines.append(f"| `{c}` | {ms(x['aurc'], x['aurc_std'], 3)} | {ms(x['augrc'], x['augrc_std'], 3)} | " + " | ".join(cells) + f" | {verdict} |")
             if x["beats"]:
                 kept.append(c)
         winners = [c for c in scores if e4[c, VERDICT_RISKS[0]]["beats"]]
@@ -307,10 +310,10 @@ def write_csvs(out: Path, ref: str, active: list[str], e3: dict, e4: dict) -> No
                 w.writerow([ref, c, r, *vals, x["n"]])
     with (out / "e4.csv").open("w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["family", "score", "r_star", "aurc_x1000_mean", "aurc_x1000_std", "d_rac_mean", "d_rac_std", "better_rac",
+        w.writerow(["family", "score", "r_star", "aurc_x1000_mean", "aurc_x1000_std", "augrc_x1000_mean", "augrc_x1000_std", "d_rac_mean", "d_rac_std", "better_rac",
                     "d_car_mean", "d_car_std", "better_car", "n_pairs", "beats_sr"])
         for (c, r), x in e4.items():
-            w.writerow([x["family"], c, r, x["aurc"], x["aurc_std"], x["d_rac"], x["d_rac_std"], x["b_rac"],
+            w.writerow([x["family"], c, r, x["aurc"], x["aurc_std"], x["augrc"], x["augrc_std"], x["d_rac"], x["d_rac_std"], x["b_rac"],
                         x["d_car"], x["d_car_std"], x["b_car"], x["n"], int(x["beats"])])
 
 
