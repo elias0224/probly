@@ -198,14 +198,14 @@ def e4_rows(res: dict, fams: dict[str, tuple[str, list[str]]]) -> dict[tuple[str
         base_aurc = stats(res[base]["aurc"] * 1000)[0]
         for c in scores:
             a_mean, a_std = stats(res[c]["aurc"] * 1000)
-            beats = False
+            beats = True
             for r in R_GRID:
                 row = {"family": fam, "aurc": a_mean, "aurc_std": a_std}
                 row["d_rac"], row["d_rac_std"], row["b_rac"], row["n"] = paired(res[c]["rac"][r], res[base]["rac"][r], True)
                 row["d_car"], row["d_car_std"], row["b_car"], _ = paired(res[c]["car"][r], res[base]["car"][r], False)
                 rows[c, r] = row
-                if r in VERDICT_RISKS and row["d_rac"] < 0:
-                    beats = True
+                if r in VERDICT_RISKS and not (row["d_rac"] < 0 and row["b_rac"] > 0.5):
+                    beats = False
             is_baseline = c in (base, f"{fam}_sr")
             verdict = beats and a_mean < base_aurc and not is_baseline
             for r in R_GRID:
@@ -256,7 +256,8 @@ def build_markdown(args: argparse.Namespace, ref: str, ref_note: str, ctx: dict,
         "",
         "Per family, every score against the family's `maxprob` (SR) score, at the reference's operating points above "
         "(same certified pairs as E3). AURC x1000 is the mean +- std over unit x split test halves. A score beats SR if "
-        f"its mean delta risk @ ref cov is below 0 at r* {VERDICT_RISKS[0]} or {VERDICT_RISKS[1]} and its AURC is lower "
+        f"its mean delta risk @ ref cov is below 0 and it is better in more than half of the pairs at both r* "
+        f"{VERDICT_RISKS[0]} and {VERDICT_RISKS[1]}, and its AURC is lower "
         "than the baseline's. Gate rule: a score is kept if it beats SR for at least one family on E3.",
         "",
     ]
