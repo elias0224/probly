@@ -25,10 +25,10 @@ stopped (training resumes per epoch from ``runs/seed{S}/last_{stage}.pt``, dumps
 dump or evaluation job is started with too little time left. ``--shutdown`` powers the PC down (Windows, 2 min delay,
 abort with ``shutdown /a``) however the run ends, also after a crash. Progress is appended to ``runs/rehearsal_log.txt``.
 
-``--candidates no`` drops the seed-0 candidate jobs; the kept candidates (``KEPT_CANDIDATES``, masksembles) are trained
-and dumped for every seed after ``dropout_scratch``, before the evaluations. ``--arch resnet18`` switches to the one-seed architecture check (VGG-16 vs ResNet-18 for SNGP and DDU), with its own
+``--candidates no`` drops the seed-0 candidate jobs; the kept candidates (``KEPT_CANDIDATES``, currently none) are
+trained and dumped for every seed after ``dropout_scratch``, before the evaluations. ``--arch resnet18`` switches to the one-seed architecture check (VGG-16 vs ResNet-18 for SNGP and DDU), with its own
 default ``--runs runs_resnet18`` and ``--out results_resnet18`` and seed 0 only: train ``base``, ``dropout``, ``dump_shift``,
-train ``ddu``, ``masksembles`` (the kept candidate) and ``sngp_scratch``, dump them, then ``check_sgr_path.py`` (output in ``runs_resnet18/check_sgr_path.txt``)::
+train ``ddu``, the kept candidates and ``sngp_scratch``, dump them, then ``check_sgr_path.py`` (output in ``runs_resnet18/check_sgr_path.txt``)::
 
     uv run python scripts/rehearsal.py --arch resnet18 --hours 9.5 --shutdown
 
@@ -63,10 +63,10 @@ SMOKE_SUBSET = 512
 SMOKE_SAMPLES = 3
 CHECK_CRITERIA = (
     "sr_base", "sr_dropout", "mc_maxprob", "ddu_maxprob", "ddu_density", "sngp_scratch_maxprob", "sngp_scratch_ds",
-    "masksembles_maxprob", "masksembles_total", "masksembles_aleatoric", "masksembles_epistemic",
 )
 # Candidates that passed check_candidates.txt (seed 0, VGG-16) and are trained for every seed and on the ResNet-18.
-KEPT_CANDIDATES = ("masksembles",)
+# Empty: masksembles passed on seed 0 but reached only 88.3% accuracy and AURC 20.2 over seeds 0-4 (base: 8.95).
+KEPT_CANDIDATES: tuple[str, ...] = ()
 CANDIDATES = ("subensemble", "masksembles", "deup")
 CANDIDATE_TRAIN = ("subensemble", "masksembles", "deup_base")
 # ddu_maxprob is only in the dumps if ddu was run (it is on the PC; the smoke queue has no ddu job, so it is skipped there).
@@ -256,7 +256,7 @@ class Queue:
         return Job(f"check_sgr_path -> {filename}", "eval", done, run)
 
     def build_arch_check_jobs(self) -> list[Job]:
-        """Queue of the architecture check: base, dropout, ddu, masksembles and sngp_scratch for the seeds, then ``check_sgr_path``."""
+        """Queue of the architecture check: base, dropout, ddu, the kept candidates and sngp_scratch for the seeds, then ``check_sgr_path``."""
         seeds = self.args.seeds
         methods = ("ddu", *KEPT_CANDIDATES) if self.args.sngp == "no" else ("ddu", *KEPT_CANDIDATES, "sngp_scratch")
         jobs = [self.train_job(stage, s) for s in seeds for stage in ("base", "dropout")]
