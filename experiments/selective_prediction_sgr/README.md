@@ -184,6 +184,32 @@ Runtime estimate (RTX 2070 Super, about 9 s per training epoch, about 15k img/s 
 samples) about 15 s each plus the fit (about a minute for Laplace); swag 30 forward passes, about 5 min (about 10 min with
 `--swag-bn-update per_sample`). Roughly 10 to 15 min per seed, 1 h for all seeds. These are estimates, not measurements.
 
+## ImageNet (Sec. 5.3, Tables 3-6)
+
+Pretrained torchvision VGG-16 and ResNet-50 (`IMAGENET1K_V1` weights, resize 256 + center crop 224) on the ILSVRC2012
+validation set, SR criterion, top-1 and top-5 loss, 100 random 25k/25k selection/test halvings, delta 0.001. No
+training is needed. ImageNet is not downloaded automatically: put `ILSVRC2012_img_val.tar` and
+`ILSVRC2012_devkit_t12.tar.gz` (from image-net.org) into `data/imagenet/` (torchvision unpacks them on first use), or a
+`data/imagenet/val/` folder with one subfolder per wnid. The dump prints a warning if the top-1 accuracy is more than
+0.5 points off the published value, which usually means a wrong label order.
+
+```powershell
+uv run python scripts/dump_imagenet.py                  # runs/imagenet/{vgg16,resnet50}.npz, est. 15-30 min
+uv run python scripts/imagenet_table.py                 # results/imagenet/
+uv run python scripts/dump_imagenet.py --fake 300 --out smoke/imagenet   # smoke test without ImageNet
+```
+
+`dump_imagenet.py` stores the labels, the top-5 classes, the softmax (float16) and the criteria `sr` (1 - max
+softmax) and `top5_mass` (1 - top-5 mass), and for VGG-16 MC dropout through the two dropout layers of the classifier
+head (`--mc-samples`, default 100; `mc_variance` is the paper's criterion, `mc_maxprob` 1 - max mean probability).
+`imagenet_table.py` writes `table.md` / `table.csv`: a check of the paper's bounds; the line-up of our risk-coverage
+curves with the paper's test points for SR, VGG-16 first (the comparison that counts, since torchvision's ResNet-50 is
+likely stronger than the paper's); and per criterion the rules `sgr` (probly's `SGRSelector`), `emp` (empirical risk
+<= r*) and the delta sweep `sgr_delta_{d}` (`--deltas`, default 0.01 0.1), next to the paper's numbers. For top-5, `sr`
+is the paper's criterion and `top5_mass` the loss-matched one. Figures: `risk_coverage.png` (Fig. 2c style) and
+`coverage.png`. The assessment of what can and cannot be reproduced is in
+`plans/selective-prediction/geifman-2017-imagenet.md`.
+
 ## Reusing the trained models
 
 ```python
