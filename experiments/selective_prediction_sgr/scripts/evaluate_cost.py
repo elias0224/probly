@@ -33,7 +33,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from sgr_experiment.metrics import apply_threshold, aurc  # noqa: E402
+from probly.metrics.selective_prediction import aurc  # noqa: E402
+from sgr_experiment.metrics import apply_threshold  # noqa: E402
 from sgr_experiment.uncertainty import decompose, member_representation, one_minus_max  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 

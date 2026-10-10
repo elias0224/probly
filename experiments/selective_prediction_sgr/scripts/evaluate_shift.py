@@ -24,14 +24,12 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
+from probly.metrics.selective_prediction import augrc, aurc, risk_coverage_curve  # noqa: E402
 from probly.selective_prediction import CoverageSelector, SGRSelector  # noqa: E402
 from sgr_experiment.metrics import (  # noqa: E402
     apply_threshold,
-    augrc,
-    aurc,
     auroc,
     e_aurc,
-    risk_coverage_curve,
     sgr_threshold,
     threshold_for_risk,
 )
@@ -39,19 +37,45 @@ from sgr_experiment.shift import CORRUPTIONS, OOD_DATASETS, SEVERITIES, corrupte
 from sgr_experiment.uncertainty import decompose, member_representation, one_minus_max  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
+# Plain-language names of the scores (the part after the method name); the single source for all reports and plots.
+SCORE_NAMES = {
+    "maxprob": "max prob",
+    "total": "total entropy",
+    "aleatoric": "aleatoric",
+    "epistemic": "epistemic",
+    "variance": "paper variance",
+    "density": "density",
+    "ds": "distance-aware",
+    "sr": "softmax",
+    "error": "predicted error",
+}
+# Plain-language names of the threshold rules (keys of the ``options`` CSV columns) and whether they carry a guarantee.
+RULE_LABELS = {
+    "emp": "Empirical (no guarantee)",
+    "sgr": "SGR",
+    "cov": "Coverage selector",
+    "LTT Bonf": "Learn-then-Test, Bonferroni",
+    "LTT FS": "Learn-then-Test, fixed sequence",
+    "FS split": "Fixed sequence, split",
+    "Chow raw": "Softmax cutoff 1 - r*",
+    "Chow TS": "Softmax cutoff, temperature scaled",
+    "Conf LAC": "Conformal singletons",
+    "Conf APS": "Conformal APS singletons",
+}
+GUARANTEED_RULES = ["sgr", "LTT Bonf", "LTT FS", "FS split"]
 # label, color and line style per criterion; the order is the order of all tables and plots.
 CRITERIA = {
-    "sr_base": {"label": "SR, base model", "color": "#16a085", "ls": "-"},
-    "sr_dropout": {"label": "SR, dropout model", "color": "#9b59b6", "ls": "-"},
-    "mc_maxprob": {"label": "MC, 1 - max mean prob", "color": "#1e88e5", "ls": "-"},
-    "mc_total": {"label": "MC, total entropy", "color": "#0d2f6e", "ls": "-"},
-    "mc_aleatoric": {"label": "MC, aleatoric", "color": "#fb8c00", "ls": "-"},
-    "mc_epistemic": {"label": "MC, epistemic", "color": "#43a047", "ls": "-"},
-    "mc_variance": {"label": "MC, paper variance", "color": "#ff0d57", "ls": "-"},
-    "ens_maxprob": {"label": "Ensemble, 1 - max mean prob", "color": "#1e88e5", "ls": "--"},
-    "ens_total": {"label": "Ensemble, total entropy", "color": "#0d2f6e", "ls": "--"},
-    "ens_aleatoric": {"label": "Ensemble, aleatoric", "color": "#fb8c00", "ls": "--"},
-    "ens_epistemic": {"label": "Ensemble, epistemic", "color": "#43a047", "ls": "--"},
+    "sr_base": {"label": "Softmax (base model)", "color": "#16a085", "ls": "-"},
+    "sr_dropout": {"label": "Softmax (dropout model)", "color": "#9b59b6", "ls": "-"},
+    "mc_maxprob": {"label": "MC dropout, max prob", "color": "#1e88e5", "ls": "-"},
+    "mc_total": {"label": "MC dropout, total entropy", "color": "#0d2f6e", "ls": "-"},
+    "mc_aleatoric": {"label": "MC dropout, aleatoric", "color": "#fb8c00", "ls": "-"},
+    "mc_epistemic": {"label": "MC dropout, epistemic", "color": "#43a047", "ls": "-"},
+    "mc_variance": {"label": "MC dropout, paper variance", "color": "#ff0d57", "ls": "-"},
+    "ens_maxprob": {"label": "Deep ensemble, max prob", "color": "#1e88e5", "ls": "--"},
+    "ens_total": {"label": "Deep ensemble, total entropy", "color": "#0d2f6e", "ls": "--"},
+    "ens_aleatoric": {"label": "Deep ensemble, aleatoric", "color": "#fb8c00", "ls": "--"},
+    "ens_epistemic": {"label": "Deep ensemble, epistemic", "color": "#43a047", "ls": "--"},
 }
 # Post-training methods (``dump_methods.py``); they are added when their dumps exist for all seeds.
 _METHOD_STYLE = {
@@ -62,9 +86,9 @@ _METHOD_STYLE = {
     "ddu": ("DDU-style", "#5e35b1"),
     "vbll": ("VBLL", "#f4511e"),
     "sngp": ("SNGP", "#2e7d32"),
-    "sngp_long": ("SNGP 50-ep fine-tune", "#66bb6a"),
+    "sngp_long": ("SNGP, 50-epoch fine-tune", "#66bb6a"),
     "sngp_scratch": ("SNGP from scratch", "#1b5e20"),
-    "dropout_scratch": ("MC dropout from scratch", "#ff8f00"),
+    "dropout_scratch": ("Paper model", "#ff8f00"),
     "subensemble": ("Subensemble (5 heads)", "#6d4c41"),
     "masksembles": ("Masksembles (4 masks)", "#d81b60"),
     "deup": ("DEUP", "#00897b"),
@@ -90,12 +114,13 @@ METHOD_KEYS = {
 }
 for _m, _keys in METHOD_KEYS.items():
     for _k in _keys:
+        _prefix = "Paper model, MC dropout" if _m == "dropout_scratch" and _k != "sr" else _METHOD_STYLE[_m][0]
         CRITERIA[f"{_m}_{_k}"] = {
-            "label": f"{_METHOD_STYLE[_m][0]}, {_k}",
+            "label": f"{_prefix}, {SCORE_NAMES[_k]}",
             "color": _METHOD_STYLE[_m][1],
             "ls": _QUANTITY_LS[_k],
         }
-CRITERIA["swa_maxprob"] = {"label": "SWA mean, 1 - max prob", "color": "#4dd0e1", "ls": "-"}
+CRITERIA["swa_maxprob"] = {"label": "SWA mean, max prob", "color": "#4dd0e1", "ls": "-"}
 MAIN_GROUP = [c for c in CRITERIA if c.startswith(("sr_", "mc_", "ens_"))]
 # Figures of the methods: confidence scores (1 - max prob) in one, epistemic and density scores in the other.
 FIGURE_GROUPS = {
@@ -402,7 +427,7 @@ def plot_id(path: Path, clean: dict, crits: list[str]) -> None:
         style = CRITERIA[c]
         ys = []
         for crit, pred in clean["units"][c]:
-            cov, rsk = risk_coverage_curve(crit, (pred != clean["labels"]).astype(np.float64))
+            cov, rsk, _ = risk_coverage_curve(crit, (pred != clean["labels"]).astype(np.float64))
             ys.append(np.interp(grid, cov, rsk))
         ax.plot(grid, np.mean(ys, axis=0), color=style["color"], ls=style["ls"], lw=1.6, label=style["label"])
     ax.scatter([pc for _, _, pc in PAPER], [pr for _, pr, _ in PAPER], marker="D", color="black", zorder=5, label="paper (SGR)")

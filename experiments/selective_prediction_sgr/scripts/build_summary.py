@@ -20,7 +20,7 @@ import subprocess
 import warnings
 
 from evaluate import THIN_FONT, setup_fonts
-from evaluate_shift import CRITERIA
+from evaluate_shift import CRITERIA, GUARANTEED_RULES, RULE_LABELS
 import matplotlib as mpl
 
 mpl.use("Agg")
@@ -30,7 +30,7 @@ NAN = float("nan")
 DELTA = 0.001
 GREY = "#9aa0a6"
 MODES = ["emp", "sgr", "cov", "LTT Bonf", "LTT FS", "FS split", "Chow raw", "Chow TS", "Conf LAC", "Conf APS"]
-GUARANTEED = ["sgr", "LTT Bonf", "LTT FS", "FS split"]
+GUARANTEED = GUARANTEED_RULES
 CONFORMAL = ["Conf LAC", "Conf APS"]
 MODE_COLORS = {"sgr": "#1b7f5c", "LTT Bonf": "#2e9e6f", "LTT FS": "#0b5d46", "FS split": "#5bbf8f"}
 HERO_STYLE = {
@@ -40,6 +40,8 @@ HERO_STYLE = {
     "dropout_scratch_sr": {"color": "#e65100", "ls": "-", "lw": 1.5, "label": "Dropout from scratch, SR"},
     "dropout_scratch_maxprob": {"color": "#ffb74d", "ls": "--", "lw": 1.5, "label": "Dropout from scratch, MC"},
 }
+for _c, _st in HERO_STYLE.items():  # one shared display-name mapping (evaluate_shift.CRITERIA)
+    _st["label"] = CRITERIA[_c]["label"]
 HERO_CRITERIA = ["sr_base", "ens_maxprob", "mc_maxprob", "dropout_scratch_sr", "dropout_scratch_maxprob"]
 SHIFT_CRITERIA = ["sr_base", "ens_maxprob", "mc_maxprob"]
 CORRUPTIONS = ["gaussian_noise", "gaussian_blur", "contrast", "pixelate"]
@@ -197,7 +199,7 @@ def fig_hero(ctxs: list[dict]) -> bytes | None:
             )
         emp = [opt_val(ctx, r, "ens_maxprob", "emp cov_mean") for r in rs]
         if not all(math.isnan(y) for y in emp):
-            ax.plot(rs, emp, color=GREY, ls="--", label="Ensemble, no guarantee (emp)")
+            ax.plot(rs, emp, color=GREY, ls="--", label=f"{CRITERIA['ens_maxprob']['label']}, {RULE_LABELS['emp']}")
         ax.set_ylim(0, 1.02)
         style_ax(ax, "target risk r*", "coverage", ctx["name"] if len(ctxs) > 1 else None)
     handles, labels = axes[0].get_legend_handles_labels()
@@ -283,7 +285,7 @@ def fig_gain(ctxs: list[dict]) -> bytes | None:
             ax.set_ylim(min(min(ens_y), 0) - 15, max(max(ens_y), 0) + 15)
         ax.set_xticks(range(len(rs)), [f"{r:g}" for r in rs])
         ref = e3_reference(ctx)
-        style_ax(ax, "target risk r*", "coverage gain (pts)", f"{ctx['name'] + ', ' if len(ctxs) > 1 else ''}vs {ref}")
+        style_ax(ax, "target risk r*", "coverage gain (pts)", f"{ctx['name'] + ', ' if len(ctxs) > 1 else ''}vs {crit_style(ref or '')['label']}")
     h = [
         plt.Line2D([], [], marker="o", ls="", color=crit_style("ens_maxprob")["color"]),
         plt.Line2D([], [], marker="o", ls="", color="#c4c8cc"),
@@ -357,7 +359,7 @@ def fragile_table(ctxs: list[dict]) -> str:
             cert = cert_table(ctx).get(crit, NAN)
             cov = opt_val(ctx, 0.01, crit, "sgr cov_mean")
             cells += f"<td>{fmt_pct(cert)}</td><td>{fmt_pct(cov)}</td>"
-        body += f"<tr><td>{crit}</td>{cells}</tr>"
+        body += f"<tr><td>{crit_style(crit)["label"]}</td>{cells}</tr>"
     return f"<table>{head}</tr>{body}</table>"
 
 
@@ -408,7 +410,7 @@ def fig_rules(ctxs: list[dict]) -> bytes | None:
                     ax.barh(k + dy, c, 0.34, color=pal[cls][shade])
                     txt = f"{c:.2f}" + (f"  viol {v:.0%}" if not math.isnan(v) and v > 0.01 else "")
                     ax.text(c + 0.01, k + dy, txt, va="center", fontsize=7.5)
-            ax.set_yticks(range(len(order)), order, fontsize=8)
+            ax.set_yticks(range(len(order)), [RULE_LABELS[m] for m in order], fontsize=8)
             ax.set_ylim(len(order) - 0.5, -0.5)
             ax.set_xlim(0, 1.3)
             ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1.0])
@@ -418,7 +420,7 @@ def fig_rules(ctxs: list[dict]) -> bytes | None:
             style_ax(ax, "coverage", None, title)
             ax.grid(axis="y", alpha=0)
     h = [plt.Rectangle((0, 0), 1, 1, color="#555555"), plt.Rectangle((0, 0), 1, 1, color="#c8c8c8")]
-    fig.legend(h, ["ens_maxprob (dark)", "sr_base (light)"], loc="lower center", ncol=2, frameon=False, fontsize=8)
+    fig.legend(h, [f'{CRITERIA["ens_maxprob"]["label"]} (dark)', f'{CRITERIA["sr_base"]["label"]} (light)'], loc="lower center", ncol=2, frameon=False, fontsize=8)
     refresh_ticks(fig)
     return finish(fig, rect=(0, 0.05 if len(ctxs) == 1 else 0.03, 1, 1))
 
@@ -474,7 +476,7 @@ def fig_scores(ctx: dict) -> bytes | None:
                     fontsize=7,
                     color="white",
                 )
-    a1.set_yticks(y, [r["score"] for r in sel], fontsize=7)
+    a1.set_yticks(y, [crit_style(r["score"])["label"] for r in sel], fontsize=7)
     a1.set_ylim(len(sel) - 0.5, -0.5)
     a1.legend(frameon=False, fontsize=7, loc="upper right")
     style_ax(a1, "area under the curve, x1000 (lower is better)", None, "Ranking quality")
@@ -559,9 +561,9 @@ def shift_takeaway(ctxs: list[dict], rstar: float = 0.03) -> str:
         if fails and (worst is None or min(fails) < worst[0]):
             worst = (min(fails), corr.replace("_", " "))
     if worst is None:
-        return f"{crit} keeps the SGR test risk below r* {rstar:g} at every severity on all corruptions."
+        return f"{crit_style(crit)["label"]} keeps the SGR test risk below r* {rstar:g} at every severity on all corruptions."
     return (
-        f"SGR thresholds tuned in-distribution break under shift: at r* {rstar:g}, {crit} exceeds the target "
+        f"SGR thresholds tuned in-distribution break under shift: at r* {rstar:g}, {crit_style(crit)["label"]} exceeds the target "
         f"already at severity {worst[0]:g} ({worst[1]})."
     )
 

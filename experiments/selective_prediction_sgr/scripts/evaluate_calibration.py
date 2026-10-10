@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 from collections import defaultdict
 from pathlib import Path
+import warnings
 
 from evaluate import setup_fonts
 from evaluate_shift import CRITERIA, SHIFT_DATASETS, Tables, mean_of, save, style_axes
@@ -22,20 +23,27 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from probly.metrics.selective_prediction import aurc  # noqa: E402
 from sgr_experiment.calibration import brier_score, ranking_scores  # noqa: E402
-from sgr_experiment.metrics import aurc, e_aurc  # noqa: E402
+from sgr_experiment.metrics import e_aurc  # noqa: E402
 from sgr_experiment.shift import CORRUPTIONS, SEVERITIES, corrupted_name  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
 METHODS = ["finetune", "swag", "laplace", "gda", "ddu", "vbll", "sngp", "sngp_long", "sngp_scratch", "dropout_scratch"]
 SOURCES = ["sr_base", "sr_dropout", "mc", "ens", *METHODS, "swa"]
 SOURCE_STYLE = {
-    "sr_base": ("SR, base model", "sr_base", "o"),
-    "sr_dropout": ("SR, dropout model", "sr_dropout", "s"),
-    "mc": ("MC mean", "mc_maxprob", "^"),
-    "ens": ("Ensemble mean", "ens_maxprob", "v"),
+    "sr_base": (CRITERIA["sr_base"]["label"], "sr_base", "o"),
+    "sr_dropout": (CRITERIA["sr_dropout"]["label"], "sr_dropout", "s"),
+    "mc": ("MC dropout (mean)", "mc_maxprob", "^"),
+    "ens": ("Deep ensemble (mean)", "ens_maxprob", "v"),
     "swa": ("SWA mean", "swa_maxprob", "D"),
     **{m: (CRITERIA[f"{m}_maxprob"]["label"].split(",")[0] if f"{m}_maxprob" in CRITERIA else m, f"{m}_maxprob", ".") for m in METHODS},
+}
+# the plot shows only these sources, styled like the shift plot of the report
+PLOT_SOURCES = {
+    "sr_base": ("#16a085", 1.5),
+    "ens": ("#1e3a8a", 2.4),
+    "mc": ("#1e88e5", 1.5),
 }
 RANK_SCORES = ["msr", "tu_log", "tu_brier"]
 VARIANTS = ["raw", "ts"]
@@ -176,28 +184,34 @@ def build_tables(acc: dict, data: dict[str, dict], sources: list[str], out: Path
 
 
 def plot_ece(path: Path, acc: dict, data: dict[str, dict], sources: list[str]) -> None:
-    """ECE versus corruption severity (0 is clean), solid raw and dashed temperature scaled."""
+    """ECE versus corruption severity (0 is clean) for the key sources, solid raw and dashed temperature scaled."""
     corruptions = [c for c in CORRUPTIONS if any(corrupted_name(c, s) in data for s in SEVERITIES)]
-    fig, axes = plt.subplots(1, len(corruptions), figsize=(4 * len(corruptions), 4), sharey=True, squeeze=False)
+    shown = [s for s in PLOT_SOURCES if s in sources]
+    fig, axes = plt.subplots(1, len(corruptions), figsize=(10, 2.9), squeeze=False)
     for ax, corruption in zip(axes[0], corruptions, strict=True):
         sevs = [s for s in SEVERITIES if corrupted_name(corruption, s) in data]
-        for src in sources:
-            label, ckey, marker = SOURCE_STYLE[src]
-            color = CRITERIA[ckey]["color"] if ckey in CRITERIA else None
+        for src in shown:
+            label = CRITERIA[SOURCE_STYLE[src][1]]["label"]
+            color, lw = PLOT_SOURCES[src]
             for v, ls in (("raw", "-"), ("ts", "--")):
                 ys = [mean_of(acc, ("shift", CLEAN, "ece", v, src))]
                 ys += [mean_of(acc, ("shift", corrupted_name(corruption, s), "ece", v, src)) for s in sevs]
-                ax.plot([0, *sevs], ys, color=color, ls=ls, marker=marker, ms=3, lw=1.3, label=label if v == "raw" else None)
-        ax.set_title(corruption)
+                name = label if v == "raw" else f"{label}, temperature scaled"
+                ax.plot([0, *sevs], ys, color=color, ls=ls, marker="o", ms=3, lw=lw, label=name)
+        ax.set_title(corruption.replace("_", " "), fontweight="semibold")
         ax.set_xticks([0, *sevs])
         ax.set_xlabel("severity")
         ax.grid(alpha=0.25)
-    axes[0][0].set_ylabel("ECE (solid raw, dashed TS)")
-    axes[0][-1].legend(loc="upper left", bbox_to_anchor=(1.02, 1), frameon=False, fontsize=8)
-    for ax in axes[0]:
-        ax.title.set_fontweight("semibold")
         style_axes(ax)
-    save(fig, path)
+    axes[0][0].set_ylabel("ECE")
+    axes[0][0].yaxis.label.set_fontweight("semibold")
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, frameon=False, fontsize=8)
+    fig.tight_layout(rect=(0, 0.14, 1, 1))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        fig.savefig(path, dpi=200)
+    plt.close(fig)
 
 
 def summary(acc: dict, sources: list[str]) -> None:

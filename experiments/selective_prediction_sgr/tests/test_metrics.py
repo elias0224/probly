@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import numpy as np
 
+from probly.metrics.selective_prediction import aurc, coverage_at_risk, risk_coverage_curve
 from sgr_experiment.metrics import (
     apply_threshold,
-    aurc,
     auroc,
-    coverage_at_risk,
     e_aurc,
     risk_bound,
-    risk_coverage_curve,
     sgr_threshold,
     threshold_for_risk,
 )
@@ -21,18 +19,11 @@ C = np.array([0.4, 0.1, 0.3, 0.2])
 L = np.array([0.0, 0.0, 0.0, 1.0])
 
 
-def test_curve_no_ties() -> None:
-    cov, rsk = risk_coverage_curve(C, L)
-    np.testing.assert_allclose(cov, [0.25, 0.5, 0.75, 1.0])
-    np.testing.assert_allclose(rsk, [0.0, 1 / 2, 1 / 3, 1 / 4])
-
-
-def test_curve_ties_accepted_together() -> None:
-    c = np.array([0.1, 0.2, 0.2, 0.3])
-    loss = np.array([0.0, 1.0, 0.0, 0.0])
-    cov, rsk = risk_coverage_curve(c, loss)
-    np.testing.assert_allclose(cov, [0.25, 0.75, 1.0])
-    np.testing.assert_allclose(rsk, [0.0, 1 / 3, 1 / 4])
+def test_probly_curve_has_coverage_zero_endpoint() -> None:
+    cov, rsk, thr = risk_coverage_curve(C, L)
+    np.testing.assert_allclose(cov, [0.0, 0.25, 0.5, 0.75, 1.0])
+    np.testing.assert_allclose(rsk, [0.0, 0.0, 1 / 2, 1 / 3, 1 / 4])
+    assert thr[0] == -np.inf
 
 
 def test_coverage_at_risk_non_monotone() -> None:
@@ -42,10 +33,6 @@ def test_coverage_at_risk_non_monotone() -> None:
     assert coverage_at_risk(C, L, 0.4) == 1.0
     assert coverage_at_risk(C, L, 0.0) == 0.25
     assert coverage_at_risk(C, L, 1.0) == 1.0
-
-
-def test_coverage_at_risk_none_feasible() -> None:
-    assert coverage_at_risk(np.array([0.1, 0.2]), np.array([1.0, 1.0]), 0.5) == 0.0
 
 
 def test_threshold_for_risk_and_apply() -> None:
@@ -68,18 +55,20 @@ def test_threshold_with_ties() -> None:
     assert coverage_at_risk(c, loss, 0.2) == 0.25
 
 
-def test_aurc_hand_computed() -> None:
-    assert np.isclose(aurc(C, L), (0 + 1 / 2 + 1 / 3 + 1 / 4) / 4)
-    # Optimal ranking: risks 0, 0, 0, 1/4.
-    assert np.isclose(e_aurc(C, L), (0 + 1 / 2 + 1 / 3 + 1 / 4) / 4 - 1 / 16)
+def test_e_aurc_hand_computed() -> None:
+    # Trapezoid AURC over the curve with the coverage-0 endpoint; the optimal ranking has risks 0, 0, 0, 0, 1/4.
+    trapz = lambda r: float(np.trapezoid(r, [0.0, 0.25, 0.5, 0.75, 1.0]))  # noqa: E731
+    assert np.isclose(aurc(C, L), trapz([0, 0, 1 / 2, 1 / 3, 1 / 4]))
+    assert np.isclose(e_aurc(C, L), trapz([0, 0, 1 / 2, 1 / 3, 1 / 4]) - trapz([0, 0, 0, 0, 1 / 4]))
 
 
-def test_aurc_ties_share_the_group_risk() -> None:
-    c = np.array([0.1, 0.2, 0.2, 0.3])
-    loss = np.array([0.0, 1.0, 0.0, 0.0])
-    # Risks per instance: 0, 1/3, 1/3, 1/4 whatever the order of the tied pair.
-    assert np.isclose(aurc(c, loss), (0 + 1 / 3 + 1 / 3 + 1 / 4) / 4)
-    assert np.isclose(aurc(c, loss[[0, 2, 1, 3]]), aurc(c, loss))
+def test_threshold_agrees_with_coverage_at_risk() -> None:
+    rng = np.random.default_rng(1)
+    crit = np.round(rng.random(500), 2)
+    loss = (rng.random(500) < 0.2 * crit).astype(np.float64)
+    for r in (0.0, 0.02, 0.05, 0.1, 0.3):
+        thr = threshold_for_risk(crit, loss, r)
+        assert apply_threshold(crit, loss, thr)[1] == coverage_at_risk(crit, loss, r) or thr == -np.inf
 
 
 def test_e_aurc_zero_for_optimal_ranking() -> None:

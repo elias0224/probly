@@ -25,7 +25,8 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from sgr_experiment.metrics import apply_threshold, coverage_at_risk  # noqa: E402
+from probly.metrics.selective_prediction import coverage_at_risk  # noqa: E402
+from sgr_experiment.metrics import apply_threshold  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
 ROWS = ["dropout_scratch_sr", "dropout_scratch_maxprob", "sr_dropout", "sr_base"]

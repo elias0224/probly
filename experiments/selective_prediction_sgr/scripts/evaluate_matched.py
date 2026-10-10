@@ -30,8 +30,9 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from probly.metrics.selective_prediction import augrc, aurc, coverage_at_risk  # noqa: E402
 from probly.selective_prediction import CoverageSelector  # noqa: E402
-from sgr_experiment.metrics import apply_threshold, augrc, aurc, coverage_at_risk  # noqa: E402
+from sgr_experiment.metrics import apply_threshold  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
 R_GRID = [0.01, 0.02, 0.03, 0.05]

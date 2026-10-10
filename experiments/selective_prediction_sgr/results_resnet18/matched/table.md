@@ -86,28 +86,28 @@ Reference `sr_base` certified on 100% of the splits (50 of 50 pairs).
 
 # E4: scores per family
 
-Per family, every score against the family's `maxprob` (SR) score, at the reference's operating points above (same certified pairs as E3). AURC x1000 is the mean +- std over unit x split test halves. A score beats SR if its mean delta risk @ ref cov is below 0 and it is better in more than half of the pairs at both r* 0.01 and 0.03, and its AURC is lower than the baseline's. Gate rule: a score is kept if it beats SR for at least one family on E3.
+Per family, every score against the family's `maxprob` (SR) score, at the reference's operating points above (same certified pairs as E3). AURC x1000 and AUGRC x1000 (Traub et al., 2024) are the mean +- std over unit x split test halves; the gate uses AURC only. A score beats SR if its mean delta risk @ ref cov is below 0 and it is better in more than half of the pairs at both r* 0.01 and 0.03, and its AURC is lower than the baseline's. Gate rule: a score is kept if it beats SR for at least one family on E3.
 
 ## Family `mc` (baseline `mc_maxprob`)
 
-| score | AURC x1000 | d risk r*=0.01 | better | d cov r*=0.01 | better | d risk r*=0.03 | better | d cov r*=0.03 | better | beats SR |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `mc_maxprob` | 6.447 +- 0.755 | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | baseline |
-| `mc_total` | 6.523 +- 0.770 | 0.0001 +- 0.0002 | 37% | -0.0070 +- 0.0095 | 23% | -0.0001 +- 0.0006 | 52% | -0.0000 +- 0.0020 | 42% | no |
-| `mc_aleatoric` | 6.514 +- 0.770 | 0.0001 +- 0.0002 | 34% | -0.0067 +- 0.0084 | 20% | -0.0001 +- 0.0006 | 58% | -0.0000 +- 0.0020 | 42% | no |
-| `mc_epistemic` | 6.745 +- 0.771 | 0.0003 +- 0.0003 | 11% | -0.0292 +- 0.0369 | 23% | 0.0001 +- 0.0007 | 44% | -0.0005 +- 0.0019 | 36% | no |
-| `mc_variance` | 6.707 +- 0.757 | 0.0003 +- 0.0003 | 14% | -0.0176 +- 0.0331 | 20% | 0.0001 +- 0.0006 | 46% | -0.0004 +- 0.0013 | 30% | no |
+| score | AURC x1000 | AUGRC x1000 | d risk r*=0.01 | better | d cov r*=0.01 | better | d risk r*=0.03 | better | d cov r*=0.03 | better | beats SR |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `mc_maxprob` | 6.442 +- 0.755 | 4.864 +- 0.458 | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | baseline |
+| `mc_total` | 6.518 +- 0.770 | 4.900 +- 0.467 | 0.0001 +- 0.0002 | 37% | -0.0070 +- 0.0095 | 23% | -0.0001 +- 0.0006 | 52% | -0.0000 +- 0.0020 | 42% | no |
+| `mc_aleatoric` | 6.508 +- 0.770 | 4.897 +- 0.467 | 0.0001 +- 0.0002 | 34% | -0.0067 +- 0.0084 | 20% | -0.0001 +- 0.0006 | 58% | -0.0000 +- 0.0020 | 42% | no |
+| `mc_epistemic` | 6.740 +- 0.771 | 5.031 +- 0.452 | 0.0003 +- 0.0003 | 11% | -0.0292 +- 0.0369 | 23% | 0.0001 +- 0.0007 | 44% | -0.0005 +- 0.0019 | 36% | no |
+| `mc_variance` | 6.702 +- 0.757 | 5.017 +- 0.455 | 0.0003 +- 0.0003 | 14% | -0.0176 +- 0.0331 | 20% | 0.0001 +- 0.0006 | 46% | -0.0004 +- 0.0013 | 30% | no |
 
 Verdict: no score beats SR.
 
 ## Family `ens` (baseline `ens_maxprob`)
 
-| score | AURC x1000 | d risk r*=0.01 | better | d cov r*=0.01 | better | d risk r*=0.03 | better | d cov r*=0.03 | better | beats SR |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `ens_maxprob` | 4.110 +- 0.519 | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | baseline |
-| `ens_total` | 4.215 +- 0.541 | 0.0000 +- 0.0001 | 49% | -0.0000 +- 0.0025 | 51% | 0.0004 +- 0.0007 | 26% | -0.0035 +- 0.0022 | 2% | no |
-| `ens_aleatoric` | 4.284 +- 0.554 | 0.0000 +- 0.0002 | 43% | 0.0008 +- 0.0047 | 60% | 0.0023 +- 0.0014 | 4% | -0.0066 +- 0.0029 | 2% | no |
-| `ens_epistemic` | 4.019 +- 0.525 | 0.0003 +- 0.0004 | 23% | -0.0050 +- 0.0152 | 43% | 0.0049 +- 0.0012 | 0% | -0.0169 +- 0.0027 | 0% | no |
+| score | AURC x1000 | AUGRC x1000 | d risk r*=0.01 | better | d cov r*=0.01 | better | d risk r*=0.03 | better | d cov r*=0.03 | better | beats SR |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `ens_maxprob` | 4.105 +- 0.519 | 3.184 +- 0.289 | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | 0.0000 +- 0.0000 | 0% | baseline |
+| `ens_total` | 4.210 +- 0.541 | 3.270 +- 0.308 | 0.0000 +- 0.0001 | 49% | -0.0000 +- 0.0025 | 51% | 0.0004 +- 0.0007 | 26% | -0.0035 +- 0.0022 | 2% | no |
+| `ens_aleatoric` | 4.280 +- 0.554 | 3.318 +- 0.318 | 0.0000 +- 0.0002 | 43% | 0.0008 +- 0.0047 | 60% | 0.0023 +- 0.0014 | 4% | -0.0066 +- 0.0029 | 2% | no |
+| `ens_epistemic` | 4.015 +- 0.525 | 3.409 +- 0.288 | 0.0003 +- 0.0004 | 23% | -0.0050 +- 0.0152 | 43% | 0.0049 +- 0.0012 | 0% | -0.0169 +- 0.0027 | 0% | no |
 
 Verdict: no score beats SR.
 

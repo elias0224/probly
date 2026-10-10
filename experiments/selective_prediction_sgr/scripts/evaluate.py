@@ -15,8 +15,9 @@ from matplotlib import font_manager  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from probly.metrics.selective_prediction import coverage_at_risk, risk_coverage_curve  # noqa: E402
 from probly.selective_prediction import CoverageSelector, SGRSelector  # noqa: E402
-from sgr_experiment.metrics import apply_threshold, coverage_at_risk, risk_coverage_curve, threshold_for_risk  # noqa: E402
+from sgr_experiment.metrics import apply_threshold, threshold_for_risk  # noqa: E402
 from sgr_experiment.uncertainty import one_minus_max  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
@@ -249,7 +250,7 @@ def plot(path: Path, data: list[dict]) -> None:
     for c in CRITERIA:
         ys = []
         for i, d in enumerate(data):
-            cov, rsk = risk_coverage_curve(d["criteria"][c], d["losses"][c])
+            cov, rsk, _ = risk_coverage_curve(d["criteria"][c], d["losses"][c])
             y = np.interp(grid, cov, rsk)
             ys.append(y)
             ax.plot(grid, y, color=COLORS[c], lw=0.6, alpha=0.3)
