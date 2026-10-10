@@ -1,0 +1,22 @@
+{
+  "stage": "ddu",
+  "arch": "resnet18",
+  "seed": 3,
+  "epochs": 20,
+  "lr": 0.01,
+  "lr_step_size": 10,
+  "momentum": 0.9,
+  "weight_decay": 0.0005,
+  "batch_size": 128,
+  "dropout_p": null,
+  "swag": null,
+  "sn_coeff": 3.0,
+  "sngp": null,
+  "vbll_parameterization": null,
+  "subensemble": null,
+  "masksembles": null,
+  "deup_split": null,
+  "subset": null,
+  "test_acc": 0.9339,
+  "git_commit": "1a6c62919086fb373f5caee641fae698feda4be3"
+}

@@ -1,0 +1,88 @@
+[2026-10-07 16:12:11] START train subensemble seed 0
+[2026-10-07 16:12:11] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage subensemble --seed 0 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-07 16:17:45] END   train subensemble seed 0 in 5.6 min
+[2026-10-07 16:17:45] START train masksembles seed 0
+[2026-10-07 16:17:45] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage masksembles --seed 0 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-07 17:14:38] END   train masksembles seed 0 in 56.9 min
+[2026-10-07 17:14:38] START train deup_base seed 0
+[2026-10-07 17:14:38] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage deup_base --seed 0 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-07 17:49:00] END   train deup_base seed 0 in 34.4 min
+[2026-10-07 17:49:00] START dump subensemble seeds 0
+[2026-10-07 17:49:00] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\dump_methods.py --methods subensemble --seeds 0 --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16 --num-samples 100 --datasets cifar10 svhn cifar100 c10_gaussian_noise_s1 c10_gaussian_noise_s3 c10_gaussian_noise_s5 c10_gaussian_blur_s1 c10_gaussian_blur_s3 c10_gaussian_blur_s5 c10_contrast_s1 c10_contrast_s3 c10_contrast_s5 c10_pixelate_s1 c10_pixelate_s3 c10_pixelate_s5
+[2026-10-07 17:50:13] END   dump subensemble seeds 0 in 1.2 min
+[2026-10-07 17:50:13] START dump masksembles seeds 0
+[2026-10-07 17:50:13] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\dump_methods.py --methods masksembles --seeds 0 --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16 --num-samples 100 --datasets cifar10 svhn cifar100 c10_gaussian_noise_s1 c10_gaussian_noise_s3 c10_gaussian_noise_s5 c10_gaussian_blur_s1 c10_gaussian_blur_s3 c10_gaussian_blur_s5 c10_contrast_s1 c10_contrast_s3 c10_contrast_s5 c10_pixelate_s1 c10_pixelate_s3 c10_pixelate_s5
+[2026-10-07 17:51:23] END   dump masksembles seeds 0 in 1.2 min
+[2026-10-07 17:51:23] START dump deup seeds 0
+[2026-10-07 17:51:23] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\dump_methods.py --methods deup --seeds 0 --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16 --num-samples 100 --datasets cifar10 svhn cifar100 c10_gaussian_noise_s1 c10_gaussian_noise_s3 c10_gaussian_noise_s5 c10_gaussian_blur_s1 c10_gaussian_blur_s3 c10_gaussian_blur_s5 c10_contrast_s1 c10_contrast_s3 c10_contrast_s5 c10_pixelate_s1 c10_pixelate_s3 c10_pixelate_s5
+[2026-10-07 17:52:15] END   dump deup seeds 0 in 0.9 min
+[2026-10-07 17:52:16] START check_sgr_path -> check_candidates.txt
+[2026-10-07 17:52:16] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\check_sgr_path.py --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --seeds 0 --criteria sr_base sr_dropout mc_maxprob mc_total ddu_maxprob subensemble_maxprob subensemble_total subensemble_aleatoric subensemble_epistemic masksembles_maxprob masksembles_total masksembles_aleatoric masksembles_epistemic deup_maxprob deup_error
+[2026-10-07 17:52:22] END   check_sgr_path -> check_candidates.txt in 0.1 min
+[2026-10-07 17:52:22] START train dropout_scratch seed 0
+[2026-10-07 17:52:22] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout_scratch --seed 0 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-07 18:30:58] END   train dropout_scratch seed 0 in 38.6 min
+[2026-10-07 18:30:58] START train dropout_scratch seed 1
+[2026-10-07 18:30:58] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout_scratch --seed 1 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-07 19:03:14] Queue ended: interrupted by the user after 2.85 h.
+[2026-10-07 19:03:14] Done (21): train base seed 0; train dropout seed 0; train base seed 1; train dropout seed 1; train base seed 2; train dropout seed 2; train base seed 3; train dropout seed 3; train base seed 4; train dropout seed 4; dump base/dropout (dump_shift) seeds 0,1,2,3,4; train subensemble seed 0; train masksembles seed 0; train deup_base seed 0; dump subensemble seeds 0; dump masksembles seeds 0; dump deup seeds 0; check_sgr_path -> check_candidates.txt; train sngp_scratch seed 0; dump sngp_scratch seeds 0; train dropout_scratch seed 0
+[2026-10-07 19:03:14] Remaining (8): train dropout_scratch seed 1; train dropout_scratch seed 2; train dropout_scratch seed 3; train dropout_scratch seed 4; dump dropout_scratch seeds 0,1,2,3,4; evaluate shift; evaluate options; evaluate calibration
+[2026-10-07 19:03:14] Resume with: uv run python scripts/rehearsal.py --sngp no
+[2026-10-07 19:04:50] START train dropout_scratch seed 1
+[2026-10-07 19:04:50] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout_scratch --seed 1 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-07 19:11:31] END   train dropout_scratch seed 1 in 6.7 min
+[2026-10-07 19:11:31] START train dropout_scratch seed 2
+[2026-10-07 19:11:31] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout_scratch --seed 2 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-07 19:50:47] END   train dropout_scratch seed 2 in 39.3 min
+[2026-10-07 19:50:47] START train dropout_scratch seed 3
+[2026-10-07 19:50:47] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout_scratch --seed 3 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-07 20:31:13] END   train dropout_scratch seed 3 in 40.4 min
+[2026-10-07 20:31:13] START train dropout_scratch seed 4
+[2026-10-07 20:31:13] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout_scratch --seed 4 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-07 21:10:54] END   train dropout_scratch seed 4 in 39.7 min
+[2026-10-07 21:10:54] skip train sngp_scratch seed 1 (not wanted)
+[2026-10-07 21:10:54] skip train sngp_scratch seed 2 (not wanted)
+[2026-10-07 21:10:54] skip train sngp_scratch seed 3 (not wanted)
+[2026-10-07 21:10:54] skip train sngp_scratch seed 4 (not wanted)
+[2026-10-07 21:10:54] START dump dropout_scratch seeds 0,1,2,3,4
+[2026-10-07 21:10:54] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\dump_methods.py --methods dropout_scratch --seeds 0 1 2 3 4 --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16 --num-samples 100 --datasets cifar10 svhn cifar100 c10_gaussian_noise_s1 c10_gaussian_noise_s3 c10_gaussian_noise_s5 c10_gaussian_blur_s1 c10_gaussian_blur_s3 c10_gaussian_blur_s5 c10_contrast_s1 c10_contrast_s3 c10_contrast_s5 c10_pixelate_s1 c10_pixelate_s3 c10_pixelate_s5
+[2026-10-07 22:49:21] END   dump dropout_scratch seeds 0,1,2,3,4 in 98.4 min
+[2026-10-07 22:49:21] START train masksembles seed 1
+[2026-10-07 22:49:21] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage masksembles --seed 1 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-07 23:16:21] Queue ended: interrupted by the user after 4.19 h.
+[2026-10-07 23:16:21] Done (27): train base seed 0; train dropout seed 0; train base seed 1; train dropout seed 1; train base seed 2; train dropout seed 2; train base seed 3; train dropout seed 3; train base seed 4; train dropout seed 4; dump base/dropout (dump_shift) seeds 0,1,2,3,4; train subensemble seed 0; train masksembles seed 0; train deup_base seed 0; dump subensemble seeds 0; dump masksembles seeds 0; dump deup seeds 0; check_sgr_path -> check_candidates.txt; train sngp_scratch seed 0; dump sngp_scratch seeds 0; train dropout_scratch seed 0; train dropout_scratch seed 1; train dropout_scratch seed 2; train dropout_scratch seed 3; train dropout_scratch seed 4; dump dropout_scratch seeds 0,1,2,3,4; train masksembles seed 0
+[2026-10-07 23:16:21] Remaining (8): train masksembles seed 1; train masksembles seed 2; train masksembles seed 3; train masksembles seed 4; dump masksembles seeds 0,1,2,3,4; evaluate shift; evaluate options; evaluate calibration
+[2026-10-07 23:16:21] Resume with: uv run python scripts/rehearsal.py --sngp no
+[2026-10-08 09:51:44] skip train sngp_scratch seed 1 (not wanted)
+[2026-10-08 09:51:44] skip train sngp_scratch seed 2 (not wanted)
+[2026-10-08 09:51:44] skip train sngp_scratch seed 3 (not wanted)
+[2026-10-08 09:51:44] skip train sngp_scratch seed 4 (not wanted)
+[2026-10-08 09:51:44] START train masksembles seed 1
+[2026-10-08 09:51:44] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage masksembles --seed 1 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-08 10:19:04] END   train masksembles seed 1 in 27.3 min
+[2026-10-08 10:19:04] START train masksembles seed 2
+[2026-10-08 10:19:04] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage masksembles --seed 2 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-08 11:17:41] END   train masksembles seed 2 in 58.6 min
+[2026-10-08 11:17:41] START train masksembles seed 3
+[2026-10-08 11:17:41] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage masksembles --seed 3 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-08 12:15:57] END   train masksembles seed 3 in 58.3 min
+[2026-10-08 12:15:57] START train masksembles seed 4
+[2026-10-08 12:15:57] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage masksembles --seed 4 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16
+[2026-10-08 13:10:03] END   train masksembles seed 4 in 54.1 min
+[2026-10-08 13:10:03] START dump masksembles seeds 0,1,2,3,4
+[2026-10-08 13:10:03] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\dump_methods.py --methods masksembles --seeds 0 1 2 3 4 --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch vgg16 --num-samples 100 --datasets cifar10 svhn cifar100 c10_gaussian_noise_s1 c10_gaussian_noise_s3 c10_gaussian_noise_s5 c10_gaussian_blur_s1 c10_gaussian_blur_s3 c10_gaussian_blur_s5 c10_contrast_s1 c10_contrast_s3 c10_contrast_s5 c10_pixelate_s1 c10_pixelate_s3 c10_pixelate_s5
+[2026-10-08 13:14:19] END   dump masksembles seeds 0,1,2,3,4 in 4.3 min
+[2026-10-08 13:14:19] skip dump sngp_scratch seeds 0,1,2,3,4 (not wanted)
+[2026-10-08 13:14:19] START evaluate shift
+[2026-10-08 13:14:19] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\evaluate_shift.py --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\results\shift --n-splits 10
+[2026-10-08 13:15:37] END   evaluate shift in 1.3 min
+[2026-10-08 13:15:37] START evaluate options
+[2026-10-08 13:15:37] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\evaluate_options.py --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\results\options --n-splits 10
+[2026-10-08 13:17:27] END   evaluate options in 1.8 min
+[2026-10-08 13:17:27] START evaluate calibration
+[2026-10-08 13:17:27] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\evaluate_calibration.py --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\results\calibration --n-splits 10
+[2026-10-08 13:18:19] END   evaluate calibration in 0.9 min
+[2026-10-08 13:18:19] Queue ended: all jobs finished after 3.44 h.
+[2026-10-08 13:18:19] Done (34): train base seed 0; train dropout seed 0; train base seed 1; train dropout seed 1; train base seed 2; train dropout seed 2; train base seed 3; train dropout seed 3; train base seed 4; train dropout seed 4; dump base/dropout (dump_shift) seeds 0,1,2,3,4; train subensemble seed 0; train masksembles seed 0; train deup_base seed 0; dump subensemble seeds 0; dump masksembles seeds 0; dump deup seeds 0; train sngp_scratch seed 0; dump sngp_scratch seeds 0; train dropout_scratch seed 0; train dropout_scratch seed 1; train dropout_scratch seed 2; train dropout_scratch seed 3; train dropout_scratch seed 4; dump dropout_scratch seeds 0,1,2,3,4; train masksembles seed 0; train masksembles seed 1; train masksembles seed 2; train masksembles seed 3; train masksembles seed 4; dump masksembles seeds 0,1,2,3,4; evaluate shift; evaluate options; evaluate calibration
+[2026-10-08 13:18:19] Remaining (1): check_sgr_path -> check_candidates.txt
+[2026-10-08 13:18:19] Resume with: uv run python scripts/rehearsal.py --sngp no

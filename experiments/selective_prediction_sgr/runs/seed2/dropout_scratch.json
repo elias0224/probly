@@ -1,0 +1,22 @@
+{
+  "stage": "dropout_scratch",
+  "arch": "vgg16",
+  "seed": 2,
+  "epochs": 250,
+  "lr": 0.1,
+  "lr_step_size": 25,
+  "momentum": 0.9,
+  "weight_decay": 0.0005,
+  "batch_size": 128,
+  "dropout_p": 0.5,
+  "swag": null,
+  "sn_coeff": null,
+  "sngp": null,
+  "vbll_parameterization": null,
+  "subensemble": null,
+  "masksembles": null,
+  "deup_split": null,
+  "subset": null,
+  "test_acc": 0.9335,
+  "git_commit": "415de1ffed785abec5097b73e8b29a74e4b2e9ec"
+}

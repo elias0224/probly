@@ -1,0 +1,22 @@
+{
+  "stage": "sngp",
+  "seed": 1,
+  "epochs": 20,
+  "lr": 0.01,
+  "lr_step_size": 10,
+  "momentum": 0.9,
+  "weight_decay": 0.0005,
+  "batch_size": 128,
+  "dropout_p": null,
+  "swag": null,
+  "sn_coeff": null,
+  "sngp": {
+    "norm_multiplier": 6.0,
+    "init_std": 0.05,
+    "momentum": -1.0
+  },
+  "vbll_parameterization": null,
+  "subset": null,
+  "test_acc": 0.9225,
+  "git_commit": "789f35ce34c2e86f34363dad5c5f6f397ee516e8"
+}

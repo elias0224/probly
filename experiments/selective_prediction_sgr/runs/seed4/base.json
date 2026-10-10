@@ -1,0 +1,14 @@
+{
+  "stage": "base",
+  "seed": 4,
+  "epochs": 250,
+  "lr": 0.1,
+  "lr_step_size": 25,
+  "momentum": 0.9,
+  "weight_decay": 0.0005,
+  "batch_size": 128,
+  "dropout_p": null,
+  "subset": null,
+  "test_acc": 0.9377,
+  "git_commit": "36ebdb8e5d02a2b0df877b1e1424863598ec4931"
+}

@@ -1,0 +1,84 @@
+[2026-10-06 21:42:31] START train base seed 0
+[2026-10-06 21:42:31] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage base --seed 0 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18 --deadline 1791340951.556414
+[2026-10-06 22:38:31] END   train base seed 0 in 56.0 min
+[2026-10-06 22:38:31] START train dropout seed 0
+[2026-10-06 22:38:31] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout --seed 0 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18 --deadline 1791340951.556414
+[2026-10-06 22:49:44] END   train dropout seed 0 in 11.2 min
+[2026-10-06 22:49:44] START dump base/dropout (dump_shift) seeds 0
+[2026-10-06 22:49:44] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\dump_shift.py --seeds 0 --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18 --num-samples 100 --datasets cifar10 svhn cifar100 c10_gaussian_noise_s1 c10_gaussian_noise_s3 c10_gaussian_noise_s5 c10_gaussian_blur_s1 c10_gaussian_blur_s3 c10_gaussian_blur_s5 c10_contrast_s1 c10_contrast_s3 c10_contrast_s5 c10_pixelate_s1 c10_pixelate_s3 c10_pixelate_s5
+[2026-10-06 23:24:10] END   dump base/dropout (dump_shift) seeds 0 in 34.4 min
+[2026-10-06 23:24:10] START train ddu seed 0
+[2026-10-06 23:24:10] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage ddu --seed 0 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18 --deadline 1791340951.556414
+[2026-10-06 23:33:02] END   train ddu seed 0 in 8.9 min
+[2026-10-06 23:33:02] START train sngp_scratch seed 0
+[2026-10-06 23:33:02] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage sngp_scratch --seed 0 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18 --deadline 1791340951.556414
+[2026-10-06 23:42:11] Queue ended: interrupted by the user after 1.99 h.
+[2026-10-06 23:42:11] Done (4): train base seed 0; train dropout seed 0; dump base/dropout (dump_shift) seeds 0; train ddu seed 0
+[2026-10-06 23:42:11] Remaining (4): train sngp_scratch seed 0; dump ddu seeds 0; dump sngp_scratch seeds 0; check_sgr_path
+[2026-10-06 23:42:11] Resume with: uv run python scripts/rehearsal.py --arch resnet18 --hours 7 --shutdown
+[2026-10-07 10:36:40] START train sngp_scratch seed 0
+[2026-10-07 10:36:40] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage sngp_scratch --seed 0 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18 --deadline 1791401800.8918743
+[2026-10-07 12:11:34] END   train sngp_scratch seed 0 in 94.9 min
+[2026-10-07 12:11:34] START dump ddu seeds 0
+[2026-10-07 12:11:34] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\dump_methods.py --methods ddu --seeds 0 --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18 --num-samples 100 --datasets cifar10 svhn cifar100 c10_gaussian_noise_s1 c10_gaussian_noise_s3 c10_gaussian_noise_s5 c10_gaussian_blur_s1 c10_gaussian_blur_s3 c10_gaussian_blur_s5 c10_contrast_s1 c10_contrast_s3 c10_contrast_s5 c10_pixelate_s1 c10_pixelate_s3 c10_pixelate_s5
+[2026-10-07 12:12:25] END   dump ddu seeds 0 in 0.9 min
+[2026-10-07 12:12:25] START dump sngp_scratch seeds 0
+[2026-10-07 12:12:25] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\dump_methods.py --methods sngp_scratch --seeds 0 --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18 --num-samples 100 --datasets cifar10 svhn cifar100 c10_gaussian_noise_s1 c10_gaussian_noise_s3 c10_gaussian_noise_s5 c10_gaussian_blur_s1 c10_gaussian_blur_s3 c10_gaussian_blur_s5 c10_contrast_s1 c10_contrast_s3 c10_contrast_s5 c10_pixelate_s1 c10_pixelate_s3 c10_pixelate_s5
+[2026-10-07 12:13:23] END   dump sngp_scratch seeds 0 in 1.0 min
+[2026-10-07 12:13:23] START check_sgr_path
+[2026-10-07 12:13:23] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\check_sgr_path.py --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --seeds 0 --criteria sr_base sr_dropout mc_maxprob ddu_maxprob ddu_density sngp_scratch_maxprob sngp_scratch_ds
+[2026-10-07 12:13:29] END   check_sgr_path in 0.1 min
+[2026-10-07 12:13:29] Queue ended: all jobs finished after 1.61 h.
+[2026-10-07 12:13:29] Done (8): train base seed 0; train dropout seed 0; dump base/dropout (dump_shift) seeds 0; train ddu seed 0; train sngp_scratch seed 0; dump ddu seeds 0; dump sngp_scratch seeds 0; check_sgr_path
+[2026-10-07 12:13:29] Remaining (0): none
+[2026-10-07 15:33:24] Queue ended: all jobs finished after 0.00 h.
+[2026-10-07 15:33:24] Done (8): train base seed 0; train dropout seed 0; dump base/dropout (dump_shift) seeds 0; train ddu seed 0; train sngp_scratch seed 0; dump ddu seeds 0; dump sngp_scratch seeds 0; check_sgr_path
+[2026-10-07 15:33:24] Remaining (0): none
+[2026-10-08 13:37:30] START train base seed 1
+[2026-10-08 13:37:30] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage base --seed 1 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 14:31:43] END   train base seed 1 in 54.2 min
+[2026-10-08 14:31:43] START train dropout seed 1
+[2026-10-08 14:31:43] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout --seed 1 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 14:42:57] END   train dropout seed 1 in 11.2 min
+[2026-10-08 14:42:57] START train base seed 2
+[2026-10-08 14:42:57] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage base --seed 2 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 15:36:55] END   train base seed 2 in 54.0 min
+[2026-10-08 15:36:55] START train dropout seed 2
+[2026-10-08 15:36:55] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout --seed 2 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 15:49:02] END   train dropout seed 2 in 12.1 min
+[2026-10-08 15:49:02] START train base seed 3
+[2026-10-08 15:49:02] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage base --seed 3 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 16:46:04] END   train base seed 3 in 57.0 min
+[2026-10-08 16:46:04] START train dropout seed 3
+[2026-10-08 16:46:04] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout --seed 3 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 16:57:37] END   train dropout seed 3 in 11.5 min
+[2026-10-08 16:57:37] START train base seed 4
+[2026-10-08 16:57:37] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage base --seed 4 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 17:54:20] END   train base seed 4 in 56.7 min
+[2026-10-08 17:54:20] START train dropout seed 4
+[2026-10-08 17:54:20] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage dropout --seed 4 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 18:06:17] END   train dropout seed 4 in 11.9 min
+[2026-10-08 18:06:17] START dump base/dropout (dump_shift) seeds 0,1,2,3,4
+[2026-10-08 18:06:17] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\dump_shift.py --seeds 0 1 2 3 4 --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18 --num-samples 100 --datasets cifar10 svhn cifar100 c10_gaussian_noise_s1 c10_gaussian_noise_s3 c10_gaussian_noise_s5 c10_gaussian_blur_s1 c10_gaussian_blur_s3 c10_gaussian_blur_s5 c10_contrast_s1 c10_contrast_s3 c10_contrast_s5 c10_pixelate_s1 c10_pixelate_s3 c10_pixelate_s5
+[2026-10-08 20:24:35] END   dump base/dropout (dump_shift) seeds 0,1,2,3,4 in 138.3 min
+[2026-10-08 20:24:35] START train ddu seed 1
+[2026-10-08 20:24:35] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage ddu --seed 1 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 20:33:36] END   train ddu seed 1 in 9.0 min
+[2026-10-08 20:33:36] START train ddu seed 2
+[2026-10-08 20:33:36] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage ddu --seed 2 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 20:42:21] END   train ddu seed 2 in 8.8 min
+[2026-10-08 20:42:21] START train ddu seed 3
+[2026-10-08 20:42:21] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage ddu --seed 3 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 20:51:11] END   train ddu seed 3 in 8.8 min
+[2026-10-08 20:51:11] START train ddu seed 4
+[2026-10-08 20:51:11] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\train.py --stage ddu --seed 4 --out C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18
+[2026-10-08 20:59:58] END   train ddu seed 4 in 8.8 min
+[2026-10-08 20:59:58] START dump ddu seeds 0,1,2,3,4
+[2026-10-08 20:59:58] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\dump_methods.py --methods ddu --seeds 0 1 2 3 4 --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --data-dir C:\Users\Anwender\probly\experiments\selective_prediction_sgr\data --arch resnet18 --num-samples 100 --datasets cifar10 svhn cifar100 c10_gaussian_noise_s1 c10_gaussian_noise_s3 c10_gaussian_noise_s5 c10_gaussian_blur_s1 c10_gaussian_blur_s3 c10_gaussian_blur_s5 c10_contrast_s1 c10_contrast_s3 c10_contrast_s5 c10_pixelate_s1 c10_pixelate_s3 c10_pixelate_s5
+[2026-10-08 21:02:12] END   dump ddu seeds 0,1,2,3,4 in 2.2 min
+[2026-10-08 21:02:12] START check_sgr_path -> check_sgr_path.txt
+[2026-10-08 21:02:12] + C:\Users\Anwender\probly\experiments\selective_prediction_sgr\.venv\Scripts\python.exe C:\Users\Anwender\probly\experiments\selective_prediction_sgr\scripts\check_sgr_path.py --runs C:\Users\Anwender\probly\experiments\selective_prediction_sgr\runs_resnet18 --seeds 0 1 2 3 4 --criteria sr_base sr_dropout mc_maxprob ddu_maxprob ddu_density
+[2026-10-08 21:02:19] END   check_sgr_path -> check_sgr_path.txt in 0.1 min
+[2026-10-08 21:02:19] Queue ended: all jobs finished after 7.41 h.
+[2026-10-08 21:02:19] Done (18): train base seed 0; train dropout seed 0; train base seed 1; train dropout seed 1; train base seed 2; train dropout seed 2; train base seed 3; train dropout seed 3; train base seed 4; train dropout seed 4; dump base/dropout (dump_shift) seeds 0,1,2,3,4; train ddu seed 0; train ddu seed 1; train ddu seed 2; train ddu seed 3; train ddu seed 4; dump ddu seeds 0,1,2,3,4; check_sgr_path -> check_sgr_path.txt
+[2026-10-08 21:02:19] Remaining (0): none

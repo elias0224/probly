@@ -1,0 +1,19 @@
+{
+  "stage": "dropout",
+  "arch": "resnet18",
+  "seed": 0,
+  "epochs": 50,
+  "lr": 0.01,
+  "lr_step_size": 10,
+  "momentum": 0.9,
+  "weight_decay": 0.0005,
+  "batch_size": 128,
+  "dropout_p": 0.5,
+  "swag": null,
+  "sn_coeff": null,
+  "sngp": null,
+  "vbll_parameterization": null,
+  "subset": null,
+  "test_acc": 0.9458,
+  "git_commit": "5ff6b6fc51b626f26c154527f92dc145b8c17630"
+}

@@ -1,0 +1,25 @@
+{
+  "stage": "deup_base",
+  "arch": "vgg16",
+  "seed": 0,
+  "epochs": 250,
+  "lr": 0.1,
+  "lr_step_size": 25,
+  "momentum": 0.9,
+  "weight_decay": 0.0005,
+  "batch_size": 128,
+  "dropout_p": null,
+  "swag": null,
+  "sn_coeff": null,
+  "sngp": null,
+  "vbll_parameterization": null,
+  "subensemble": null,
+  "masksembles": null,
+  "deup_split": {
+    "holdout": 5000,
+    "seed": 12345
+  },
+  "subset": null,
+  "test_acc": 0.9331,
+  "git_commit": "b911bfa53c385aa18c4bf29521b252224c40aed0"
+}
