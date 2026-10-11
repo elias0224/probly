@@ -13,7 +13,7 @@ The first section recomputes the bound B* (Lemma 3.1) from the paper's own train
 lines our risk-coverage curves up with the paper's test points for the paper's criterion (SR), VGG-16 first: VGG-16 is
 the comparison that counts, because torchvision's ResNet-50 is likely stronger than the paper's model.
 
-Outputs in ``--out``: ``table.md``, ``table.csv``, ``risk_coverage.png`` (Fig. 2c style, with the paper's test
+Outputs in ``--out``: ``table.md``, ``table.csv``, ``summary.csv`` and ``curves.csv`` (read by the report), ``risk_coverage.png`` (Fig. 2c style, with the paper's test
 points) and ``coverage.png`` (test coverage against r*).
 """
 
@@ -248,6 +248,23 @@ def write(out: Path, results: dict, full: dict, datas: dict, args: argparse.Name
                     w.writerow([model, task, c, rule, r, *vals, p_risk, p_cov, f"{mean(res[r, 'cov_at_paper']):.6g}", f"{mean(res[r, 'risk_at_paper']):.6g}"])
 
 
+def write_extra(out: Path, full: dict, datas: dict) -> None:
+    """``summary.csv`` (full-coverage risk, AURC, risk at 60% coverage) and ``curves.csv`` (downsampled risk-coverage curves)."""
+    grid = np.linspace(0.01, 1.0, 100)
+    with (out / "summary.csv").open("w", newline="") as fh, (out / "curves.csv").open("w", newline="") as fc:
+        ws, wc = csv.writer(fh), csv.writer(fc)
+        ws.writerow(["model", "task", "criterion", "full_risk", "aurc", "risk_at_60"])
+        wc.writerow(["model", "task", "criterion", "coverage", "risk"])
+        for model, data in datas.items():
+            for task in TASKS:
+                for c, (crit, loss) in units(data, task).items():
+                    cov, risk, _ = risk_coverage_curve(crit, loss)
+                    at = lambda g: float(risk[min(np.searchsorted(cov, g - 1e-9), len(risk) - 1)])  # noqa: E731
+                    f = full[model, task, c]
+                    ws.writerow([model, task, c, f"{f['risk']:.6g}", f"{f['aurc']:.6g}", f"{at(0.6):.6g}"])
+                    wc.writerows([model, task, c, f"{g:.2f}", f"{at(g):.6g}"] for g in grid)
+
+
 def style_axes(ax: plt.Axes, has_fira: bool) -> None:
     """Grid and thin tick labels."""
     ax.grid(alpha=0.3)
@@ -325,6 +342,7 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     results, full = evaluate(datas, args)
     write(args.out, results, full, datas, args)
+    write_extra(args.out, full, datas)
     plot_curves(args.out / "risk_coverage.png", datas)
     plot_coverage(args.out / "coverage.png", results, list(datas))
     print((args.out / "table.md").read_text())

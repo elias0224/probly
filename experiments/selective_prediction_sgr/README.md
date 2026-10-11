@@ -202,7 +202,7 @@ uv run python scripts/dump_imagenet.py --fake 300 --out smoke/imagenet   # smoke
 `dump_imagenet.py` stores the labels, the top-5 classes, the softmax (float16) and the criteria `sr` (1 - max
 softmax) and `top5_mass` (1 - top-5 mass), and for VGG-16 MC dropout through the two dropout layers of the classifier
 head (`--mc-samples`, default 100; `mc_variance` is the paper's criterion, `mc_maxprob` 1 - max mean probability).
-`imagenet_table.py` writes `table.md` / `table.csv`: a check of the paper's bounds; the line-up of our risk-coverage
+`imagenet_table.py` writes `summary.csv` and `curves.csv` (read by `build_report.py`, so run it first) next to `table.md` / `table.csv`: a check of the paper's bounds; the line-up of our risk-coverage
 curves with the paper's test points for SR, VGG-16 first (the comparison that counts, since torchvision's ResNet-50 is
 likely stronger than the paper's); and per criterion the rules `sgr` (probly's `SGRSelector`), `emp` (empirical risk
 <= r*) and the delta sweep `sgr_delta_{d}` (`--deltas`, default 0.01 0.1), next to the paper's numbers. For top-5, `sr`

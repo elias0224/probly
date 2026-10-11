@@ -14,6 +14,7 @@ from sgr_experiment.imagenet import (
     topk_losses,
     torch_topk_complement,
 )
+from sgr_experiment.metrics import risk_bound
 from sgr_experiment.uncertainty import one_minus_max
 
 
@@ -46,6 +47,8 @@ def test_paper_bound_check_row() -> None:
     assert row["accepted"] == 5888
     assert row["errors"] == 95
     assert row["bound_split"] > row["bound_full"] > row["paper_bound"]
+    assert 0.001 < row["implied_delta"] < 0.5
+    assert abs(risk_bound(row["errors"], row["accepted"], row["implied_delta"]) - row["paper_bound"]) < 1e-6
 
 
 def test_evaluate_unit() -> None:

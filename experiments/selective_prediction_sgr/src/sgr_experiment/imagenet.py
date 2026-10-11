@@ -19,7 +19,7 @@ from torchvision import datasets, models
 
 from probly.metrics.selective_prediction import coverage_at_risk, risk_at_coverage
 from probly.selective_prediction import SGRSelector
-from sgr_experiment.metrics import apply_threshold, risk_bound, threshold_for_risk
+from sgr_experiment.metrics import apply_threshold, implied_delta, risk_bound, threshold_for_risk
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -194,7 +194,8 @@ def paper_bound_check(model: str, task: str, m: int = PAPER_M, delta: float = PA
     """Lemma 3.1 (Clopper-Pearson) bound that the paper's own train columns give, per row of Tables 3-6.
 
     The accepted count is ``round(train coverage * m)`` and the error count ``round(train risk * accepted)``; the
-    bound is computed at ``delta / ceil(log2 m)`` as in Algorithm 1 and at the full ``delta``.
+    bound is computed at ``delta / ceil(log2 m)`` as in Algorithm 1 and at the full ``delta``;
+    ``implied_delta`` is the delta at which the bound equals the printed one.
     """
     steps = math.ceil(math.log2(m))
     out = []
@@ -209,6 +210,7 @@ def paper_bound_check(model: str, task: str, m: int = PAPER_M, delta: float = PA
                 "paper_bound": b,
                 "bound_split": risk_bound(e, n, delta / steps),
                 "bound_full": risk_bound(e, n, delta),
+                "implied_delta": implied_delta(e, n, b),
             }
         )
     return out

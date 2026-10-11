@@ -55,6 +55,23 @@ def risk_bound(num_errors: int, num_accepted: int, delta: float) -> float:
     return float(stats.beta.ppf(1 - delta, num_errors + 1, num_accepted - num_errors))
 
 
+def implied_delta(num_errors: int, num_accepted: int, printed_bound: float) -> float:
+    """Confidence level delta at which ``risk_bound`` equals ``printed_bound`` (NaN if no delta in (1e-9, 0.5) does).
+
+    The bound falls as delta grows, so the root is found by bisection in log delta.
+    """
+    lo, hi = math.log(1e-9), math.log(0.5)
+    if not risk_bound(num_errors, num_accepted, 0.5) <= printed_bound <= risk_bound(num_errors, num_accepted, 1e-9):
+        return float("nan")
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        if risk_bound(num_errors, num_accepted, math.exp(mid)) > printed_bound:
+            lo = mid
+        else:
+            hi = mid
+    return math.exp((lo + hi) / 2)
+
+
 # probly is getting an SGRSelector / CoverageSelector in an upcoming PR; this reference implementation is meant to
 # cross-check it.
 def sgr_threshold(

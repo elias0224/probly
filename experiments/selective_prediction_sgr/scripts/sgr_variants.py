@@ -31,7 +31,7 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from sgr_experiment.metrics import apply_threshold, risk_bound  # noqa: E402
+from sgr_experiment.metrics import apply_threshold, implied_delta, risk_bound  # noqa: E402
 from sgr_experiment.utils import EXPERIMENT_DIR  # noqa: E402
 
 ROWS = ["dropout_scratch_sr", "dropout_scratch_maxprob", "sr_dropout", "sr_base"]
@@ -193,6 +193,23 @@ COLUMNS = [
 ]
 
 
+def paper_check_rows(m: int = 5000, delta: float = 0.001) -> list[dict[str, float]]:
+    """B* of the paper's own Table 1 train numbers, per row (shared with the report)."""
+    steps = math.ceil(math.log2(m))
+    out = []
+    for r, tr, tc, _, _, b in PAPER_TABLE:
+        n = round(tc * m)
+        e = round(tr * n)
+        out.append(
+            {
+                "r": r, "train_risk": tr, "train_cov": tc, "accepted": n, "errors": e, "paper_bound": b,
+                "bound_split": risk_bound(e, n, delta / steps), "bound_full": risk_bound(e, n, delta),
+                "implied_delta": implied_delta(e, n, b),
+            }
+        )
+    return out
+
+
 def paper_check() -> list[str]:
     """Markdown table: the bound that the paper's own train numbers give with m = 5000 and delta 0.001 / 13."""
     m, steps = 5000, math.ceil(math.log2(5000))
@@ -200,16 +217,15 @@ def paper_check() -> list[str]:
         "## Check of the paper's Table 1",
         "",
         f"B* (Lemma 3.1) of the paper's train risk and train coverage on m = {m} selection points, delta 0.001 / {steps} "
-        "as in Algorithm 1, and with the full delta 0.001.",
+        "as in Algorithm 1, and with the full delta 0.001. The last column is the delta at which B* equals the printed bound.",
         "",
-        "| r* | train risk | train cov | accepted | errors | paper bound | B*, delta/13 | B*, delta |",
-        "|---|---|---|---|---|---|---|---|",
+        "| r* | train risk | train cov | accepted | errors | paper bound | B*, delta/13 | B*, delta | implied delta |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
-    for r, tr, tc, _, _, b in PAPER_TABLE:
-        n = round(tc * m)
-        e = round(tr * n)
+    for x in paper_check_rows(m):
         lines.append(
-            f"| {r:.2f} | {tr:.4f} | {tc:.4f} | {n} | {e} | {b:.4f} | {risk_bound(e, n, 0.001 / steps):.4f} | {risk_bound(e, n, 0.001):.4f} |"
+            f"| {x['r']:.2f} | {x['train_risk']:.4f} | {x['train_cov']:.4f} | {x['accepted']} | {x['errors']} | "
+            f"{x['paper_bound']:.4f} | {x['bound_split']:.4f} | {x['bound_full']:.4f} | {x['implied_delta']:.3f} |"
         )
     return [*lines, ""]
 

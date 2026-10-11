@@ -57,6 +57,9 @@ def parse_args() -> argparse.Namespace:
 def setup_fonts() -> bool:
     """Use Fira Sans if installed, else the default font, without warnings."""
     logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
+    # Regular for titles, legends and annotations; probly.plot.config sets light text and bold titles on import.
+    plt.rcParams["font.weight"] = "normal"
+    plt.rcParams["axes.titleweight"] = "normal"
     try:
         font_manager.findfont("Fira Sans", fallback_to_default=False)
     except (ValueError, KeyError):
