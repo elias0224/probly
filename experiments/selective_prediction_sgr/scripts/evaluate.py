@@ -142,7 +142,7 @@ def main() -> None:
             sel, test = perm[:half], perm[half:]
             for c in CRITERIA:
                 crit, loss = d["criteria"][c], d["losses"][c]
-                m = np.array([coverage_at_risk(crit[test], loss[test], pr) for _, pr, _ in PAPER])
+                m = np.array([coverage_at_risk(crit[test], loss[test], pr)[0] for _, pr, _ in PAPER])
                 hr, hc = [], []
                 for r in risks:
                     thr = threshold_for_risk(crit[sel], loss[sel], r)

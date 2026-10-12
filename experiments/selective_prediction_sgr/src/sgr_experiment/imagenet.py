@@ -172,8 +172,8 @@ def evaluate_unit(
     acc: dict[tuple, list[float]] = defaultdict(list)
     for sel, test in halves:
         for r, _, _, p_risk, p_cov, _ in rows:
-            acc[r, "cov_at_paper"].append(float(coverage_at_risk(criterion[test], losses[test], p_risk)))
-            acc[r, "risk_at_paper"].append(float(risk_at_coverage(criterion[test], losses[test], p_cov)))
+            acc[r, "cov_at_paper"].append(float(coverage_at_risk(criterion[test], losses[test], p_risk)[0]))
+            acc[r, "risk_at_paper"].append(float(risk_at_coverage(criterion[test], losses[test], p_cov)[0]))
             for name, rule in rules.items():
                 thr, bound = rule(criterion[sel], losses[sel], r, delta)
                 certified = thr != -np.inf

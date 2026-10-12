@@ -78,7 +78,7 @@ def evaluate(data: dict, rows: list[str], n_splits: int, split_seed: int, delta:
                     acc[c, r, "sel_risk"].append(sel_risk if certified else np.nan)
                     acc[c, r, "test_risk"].append(test_risk if certified else np.nan)
                     acc[c, r, "bound"].append(bound if certified else np.nan)
-                    acc[c, r, "cov_at_paper"].append(coverage_at_risk(crit[test], loss[test], paper_risk))
+                    acc[c, r, "cov_at_paper"].append(coverage_at_risk(crit[test], loss[test], paper_risk)[0])
     return acc
 
 

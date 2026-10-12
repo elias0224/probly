@@ -28,11 +28,11 @@ def test_probly_curve_has_coverage_zero_endpoint() -> None:
 
 def test_coverage_at_risk_non_monotone() -> None:
     # Risks are 0, 1/2, 1/3, 1/4: the risk drops again after coverage 0.5.
-    assert coverage_at_risk(C, L, 0.25) == 1.0
-    assert coverage_at_risk(C, L, 0.3) == 1.0
-    assert coverage_at_risk(C, L, 0.4) == 1.0
-    assert coverage_at_risk(C, L, 0.0) == 0.25
-    assert coverage_at_risk(C, L, 1.0) == 1.0
+    assert coverage_at_risk(C, L, 0.25)[0] == 1.0
+    assert coverage_at_risk(C, L, 0.3)[0] == 1.0
+    assert coverage_at_risk(C, L, 0.4)[0] == 1.0
+    assert coverage_at_risk(C, L, 0.0)[0] == 0.25
+    assert coverage_at_risk(C, L, 1.0)[0] == 1.0
 
 
 def test_threshold_for_risk_and_apply() -> None:
@@ -52,7 +52,7 @@ def test_threshold_with_ties() -> None:
     loss = np.array([0.0, 1.0, 0.0, 0.0])
     # Accepting the tied pair costs risk 1/3, so r = 0.2 only allows the first instance.
     assert threshold_for_risk(c, loss, 0.2) == 0.1
-    assert coverage_at_risk(c, loss, 0.2) == 0.25
+    assert coverage_at_risk(c, loss, 0.2)[0] == 0.25
 
 
 def test_e_aurc_hand_computed() -> None:
@@ -68,7 +68,7 @@ def test_threshold_agrees_with_coverage_at_risk() -> None:
     loss = (rng.random(500) < 0.2 * crit).astype(np.float64)
     for r in (0.0, 0.02, 0.05, 0.1, 0.3):
         thr = threshold_for_risk(crit, loss, r)
-        assert apply_threshold(crit, loss, thr)[1] == coverage_at_risk(crit, loss, r) or thr == -np.inf
+        assert apply_threshold(crit, loss, thr)[1] == coverage_at_risk(crit, loss, r)[0] or thr == -np.inf
 
 
 def test_e_aurc_zero_for_optimal_ranking() -> None:

@@ -133,7 +133,7 @@ def evaluate_criterion(units: list, n_ref: int, labels: np.ndarray, splits: list
                     risk, cov = apply_threshold(crit[test], loss[test], thr)
                     res["rac"][r][u, s] = risk
                     res["ach"][r][u, s] = cov
-                res["car"][r][u, s] = coverage_at_risk(crit[test], loss[test], ctx["r_sgr"][r][u, s])
+                res["car"][r][u, s] = coverage_at_risk(crit[test], loss[test], ctx["r_sgr"][r][u, s])[0]
     return res
 
 
