@@ -37,10 +37,10 @@ def test_metrics_match_numpy() -> None:
         np.testing.assert_allclose(float(function(criterion_t, losses_t)), function(criterion, losses))
     for coverage in (0.25, 0.5, 1.0):
         actual = risk_at_coverage(criterion_t, losses_t, coverage)
-        np.testing.assert_allclose(float(actual), risk_at_coverage(criterion, losses, coverage))
+        np.testing.assert_allclose([float(v) for v in actual], risk_at_coverage(criterion, losses, coverage))
     for risk in (0.0, 0.2, 0.3):
         actual = coverage_at_risk(criterion_t, losses_t, risk)
-        np.testing.assert_allclose(float(actual), coverage_at_risk(criterion, losses, risk))
+        np.testing.assert_allclose([float(v) for v in actual], coverage_at_risk(criterion, losses, risk))
 
 
 def test_risk_coverage_curve_casts_integer_losses() -> None:
@@ -85,3 +85,14 @@ def test_risk_coverage_curve_accepts_numpy_losses() -> None:
 def test_nan_criterion_raises() -> None:
     with pytest.raises(ValueError, match="criterion must not contain NaN"):
         aurc(torch.tensor([0.1, torch.nan]), torch.zeros(2))
+
+
+@pytest.mark.parametrize("value", [torch.nan, torch.inf, -torch.inf])
+def test_non_finite_losses_raise(value: float) -> None:
+    with pytest.raises(ValueError, match="losses must be finite"):
+        aurc(torch.tensor([0.1, 0.2]), torch.tensor([0.0, value]))
+
+
+def test_negative_infinite_criterion_raises() -> None:
+    with pytest.raises(ValueError, match="criterion must not contain -inf"):
+        aurc(torch.tensor([-torch.inf, 0.2]), torch.zeros(2))

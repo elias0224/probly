@@ -38,10 +38,10 @@ def test_metrics_match_numpy() -> None:
         np.testing.assert_allclose(float(function(criterion_j, losses_j)), function(criterion, losses), rtol=1e-6)
     for coverage in (0.25, 0.5, 1.0):
         actual = risk_at_coverage(criterion_j, losses_j, coverage)
-        np.testing.assert_allclose(float(actual), risk_at_coverage(criterion, losses, coverage), rtol=1e-6)
+        np.testing.assert_allclose([float(v) for v in actual], risk_at_coverage(criterion, losses, coverage), rtol=1e-6)
     for risk in (0.0, 0.2, 0.3):
         actual = coverage_at_risk(criterion_j, losses_j, risk)
-        np.testing.assert_allclose(float(actual), coverage_at_risk(criterion, losses, risk), rtol=1e-6)
+        np.testing.assert_allclose([float(v) for v in actual], coverage_at_risk(criterion, losses, risk), rtol=1e-6)
 
 
 def test_risk_coverage_curve_and_aurc_under_jit() -> None:
@@ -68,3 +68,14 @@ def test_risk_coverage_curve_accepts_numpy_losses() -> None:
 def test_nan_criterion_raises() -> None:
     with pytest.raises(ValueError, match="criterion must not contain NaN"):
         aurc(jnp.array([0.1, jnp.nan]), jnp.zeros(2))
+
+
+@pytest.mark.parametrize("value", [jnp.nan, jnp.inf, -jnp.inf])
+def test_non_finite_losses_raise(value: float) -> None:
+    with pytest.raises(ValueError, match="losses must be finite"):
+        aurc(jnp.array([0.1, 0.2]), jnp.array([0.0, value]))
+
+
+def test_negative_infinite_criterion_raises() -> None:
+    with pytest.raises(ValueError, match="criterion must not contain -inf"):
+        aurc(jnp.array([-jnp.inf, 0.2]), jnp.zeros(2))
