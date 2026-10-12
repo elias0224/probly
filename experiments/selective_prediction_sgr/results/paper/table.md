@@ -4,7 +4,7 @@ Seeds 0 1 2 3 4 x 10 selection/test splits (5k/5k), delta 0.001. train = selecti
 
 Paper accuracy 93.54%.
 
-## MC dropout from scratch, sr (`dropout_scratch_sr`)
+## Paper model, softmax (`dropout_scratch_sr`)
 
 Accuracy 93.59% over 5 model(s).
 
@@ -17,7 +17,7 @@ Accuracy 93.59% over 5 model(s).
 | 0.05 | 100% | 0.0382 +- 0.0001 | 0.9411 +- 0.0065 | 0.0374 +- 0.0037 | 0.9416 +- 0.0069 | 0.0499 +- 0.0001 | 0.9692 +- 0.0062 | 0.0486 | 0.9596 |
 | 0.06 | 100% | 0.0473 +- 0.0001 | 0.9644 +- 0.0061 | 0.0467 +- 0.0040 | 0.9647 +- 0.0064 | 0.0599 +- 0.0001 | 0.9882 +- 0.0059 | 0.0572 | 0.9784 |
 
-## MC dropout from scratch, maxprob (`dropout_scratch_maxprob`)
+## Paper model, MC dropout, max prob (`dropout_scratch_maxprob`)
 
 Accuracy 93.47% over 5 model(s).
 
@@ -30,7 +30,7 @@ Accuracy 93.47% over 5 model(s).
 | 0.05 | 100% | 0.0382 +- 0.0001 | 0.9385 +- 0.0058 | 0.0362 +- 0.0033 | 0.9391 +- 0.0054 | 0.0499 +- 0.0001 | 0.9693 +- 0.0056 | 0.0486 | 0.9596 |
 | 0.06 | 100% | 0.0473 +- 0.0001 | 0.9615 +- 0.0062 | 0.0454 +- 0.0038 | 0.9616 +- 0.0059 | 0.0599 +- 0.0001 | 0.9871 +- 0.0055 | 0.0572 | 0.9784 |
 
-## SR, dropout model (`sr_dropout`)
+## Softmax (dropout model) (`sr_dropout`)
 
 Accuracy 93.56% over 5 model(s).
 
@@ -43,7 +43,7 @@ Accuracy 93.56% over 5 model(s).
 | 0.05 | 100% | 0.0382 +- 0.0001 | 0.9407 +- 0.0060 | 0.0374 +- 0.0040 | 0.9404 +- 0.0073 | 0.0499 +- 0.0001 | 0.9686 +- 0.0053 | 0.0486 | 0.9596 |
 | 0.06 | 100% | 0.0473 +- 0.0001 | 0.9643 +- 0.0052 | 0.0466 +- 0.0043 | 0.9639 +- 0.0059 | 0.0599 +- 0.0001 | 0.9875 +- 0.0050 | 0.0572 | 0.9784 |
 
-## SR, base model (`sr_base`)
+## Softmax (base model) (`sr_base`)
 
 Accuracy 93.71% over 5 model(s).
 

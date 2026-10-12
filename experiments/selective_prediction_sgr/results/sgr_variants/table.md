@@ -4,18 +4,18 @@ Seeds 0 1 2 3 4 x 10 selection/test splits (5k/5k), delta 0.001 unless the varia
 
 ## Check of the paper's Table 1
 
-B* (Lemma 3.1) of the paper's train risk and train coverage on m = 5000 selection points, delta 0.001 / 13 as in Algorithm 1, and with the full delta 0.001.
+B* (Lemma 3.1) of the paper's train risk and train coverage on m = 5000 selection points, delta 0.001 / 13 as in Algorithm 1, and with the full delta 0.001. The last column is the delta at which B* equals the printed bound.
 
-| r* | train risk | train cov | accepted | errors | paper bound | B*, delta/13 | B*, delta |
-|---|---|---|---|---|---|---|---|
-| 0.01 | 0.0079 | 0.7822 | 3911 | 31 | 0.0099 | 0.0148 | 0.0134 |
-| 0.02 | 0.0160 | 0.8482 | 4241 | 68 | 0.0199 | 0.0246 | 0.0229 |
-| 0.03 | 0.0260 | 0.8988 | 4494 | 117 | 0.0298 | 0.0362 | 0.0342 |
-| 0.04 | 0.0362 | 0.9348 | 4674 | 169 | 0.0399 | 0.0476 | 0.0454 |
-| 0.05 | 0.0454 | 0.9610 | 4805 | 218 | 0.0491 | 0.0578 | 0.0554 |
-| 0.06 | 0.0526 | 0.9778 | 4889 | 257 | 0.0600 | 0.0657 | 0.0632 |
+| r* | train risk | train cov | accepted | errors | paper bound | B*, delta/13 | B*, delta | implied delta |
+|---|---|---|---|---|---|---|---|---|
+| 0.01 | 0.0079 | 0.7822 | 3911 | 31 | 0.0099 | 0.0148 | 0.0134 | 0.119 |
+| 0.02 | 0.0160 | 0.8482 | 4241 | 68 | 0.0199 | 0.0246 | 0.0229 | 0.037 |
+| 0.03 | 0.0260 | 0.8988 | 4494 | 117 | 0.0298 | 0.0362 | 0.0342 | 0.073 |
+| 0.04 | 0.0362 | 0.9348 | 4674 | 169 | 0.0399 | 0.0476 | 0.0454 | 0.101 |
+| 0.05 | 0.0454 | 0.9610 | 4805 | 218 | 0.0491 | 0.0578 | 0.0554 | 0.122 |
+| 0.06 | 0.0526 | 0.9778 | 4889 | 257 | 0.0600 | 0.0657 | 0.0632 | 0.014 |
 
-## MC dropout from scratch, sr (`dropout_scratch_sr`)
+## Paper model, softmax (`dropout_scratch_sr`)
 
 ### r* = 0.01 (paper: test risk 0.0092, test cov 0.7856)
 
@@ -89,7 +89,7 @@ B* (Lemma 3.1) of the paper's train risk and train coverage on m = 5000 selectio
 | sgr_delta_0.01 | 100% | 0.0493 | 0.9691 | 0.0485 | 0.9691 | 0.0599 | 0% |
 | sgr_delta_0.1 | 100% | 0.0517 | 0.9745 | 0.0508 | 0.9744 | 0.0599 | 0% |
 
-## MC dropout from scratch, maxprob (`dropout_scratch_maxprob`)
+## Paper model, MC dropout, max prob (`dropout_scratch_maxprob`)
 
 ### r* = 0.01 (paper: test risk 0.0092, test cov 0.7856)
 
@@ -163,7 +163,7 @@ B* (Lemma 3.1) of the paper's train risk and train coverage on m = 5000 selectio
 | sgr_delta_0.01 | 100% | 0.0493 | 0.9663 | 0.0474 | 0.9665 | 0.0599 | 0% |
 | sgr_delta_0.1 | 100% | 0.0517 | 0.9719 | 0.0500 | 0.9718 | 0.0599 | 0% |
 
-## SR, dropout model (`sr_dropout`)
+## Softmax (dropout model) (`sr_dropout`)
 
 ### r* = 0.01 (paper: test risk 0.0092, test cov 0.7856)
 
@@ -237,7 +237,7 @@ B* (Lemma 3.1) of the paper's train risk and train coverage on m = 5000 selectio
 | sgr_delta_0.01 | 100% | 0.0493 | 0.9691 | 0.0487 | 0.9687 | 0.0599 | 0% |
 | sgr_delta_0.1 | 100% | 0.0517 | 0.9747 | 0.0510 | 0.9741 | 0.0599 | 6% |
 
-## SR, base model (`sr_base`)
+## Softmax (base model) (`sr_base`)
 
 ### r* = 0.01 (paper: test risk 0.0092, test cov 0.7856)
 
