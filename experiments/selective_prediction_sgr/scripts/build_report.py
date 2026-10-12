@@ -2,7 +2,7 @@
 
 Order: summary, setup, implementation differences, replication of Geifman and El-Yaniv 2017 (CIFAR-10 Table 1, ImageNet
 Tables 3-6 and Fig. 2c), the paper's printed bounds, method comparison, threshold rules, deep ensemble + SGR, other
-experiments (calibration, OOD, shift), open issues, appendix with raw ids. The ImageNet sections need
+experiments (calibration, OOD, shift), appendix with raw ids. The ImageNet sections need
 ``imagenet_table.py`` to have run first (they are skipped with a note otherwise). All numbers are read from the result csv files; the prose lives in ``report_text.py``. Tables in the main sections
 are short on purpose, long ones are folded or in the appendix.
 
@@ -723,7 +723,6 @@ def build_html(d: Data) -> str:
             tab_ood=ood_t,
             **n,
         ),
-        "next": S["next"],
     }
     titles = [
         ("glance", "1. Summary"),
@@ -736,10 +735,9 @@ def build_html(d: Data) -> str:
         ("rules", "8. Threshold rules (CIFAR-10)"),
         ("improvement", "9. Deep ensemble + SGR (CIFAR-10)"),
         ("other", "10. Other experiments"),
-        ("next", "11. Open issues and next steps"),
     ]
     body = "".join(f"<section><h2>{t}</h2>{parts[k]}</section>" for k, t in titles)
-    body += f"<section><h2>12. Appendix</h2>{appendix(d)}</section>"
+    body += f"<section><h2>11. Appendix</h2>{appendix(d)}</section>"
     return (
         f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{rt.TITLE}</title>'
         f"<style>{REPORT_CSS}</style></head><body><main><h1>{rt.TITLE}</h1><p class=\"sub\">{rt.SUBTITLE}</p>{body}</main></body></html>"

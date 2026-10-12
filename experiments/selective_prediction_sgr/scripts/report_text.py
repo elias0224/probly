@@ -209,17 +209,3 @@ corruption the calibration error grows with severity.</p>
 <p>With corrupted test images the guarantee does not hold, since the threshold was chosen on clean images. The risk
 rises with severity for all methods shown.</p>
 """
-
-SECTIONS["next"] = """
-<ul>
-  <li><strong>SGR in probly.</strong> Open: how to correct for testing several thresholds (the delta / ceil(log2 m)
-  split is applied to a label-dependent set of tests).</li>
-  <li><strong>Scores from the task loss.</strong> 1 - top-5 mass beats SR for the top-5 loss; supports deriving the
-  rejection score from the loss.</li>
-  <li><strong>ImageNet comparability.</strong> Keras weights and Keras preprocessing not tried; no model with the
-  paper's accuracy.</li>
-  <li><strong>CIFAR-100 (Table 2)</strong> not run.</li>
-  <li><strong>CIFAR-10 extensions.</strong> Label-budget sweep (how coverage depends on the number of selection
-  labels), logit-based scores, cheaper ensembles.</li>
-</ul>
-"""
