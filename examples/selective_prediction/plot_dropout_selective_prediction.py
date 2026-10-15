@@ -14,8 +14,10 @@ from sklearn.datasets import make_moons
 import torch
 from torch import nn
 
+from probly.evaluation.selective_prediction import evaluate_selective_prediction
+from probly.metrics.selective_prediction import risk_coverage_curve
 from probly.quantification import LogLoss
-from probly.selective_prediction import SelectivePredictor, ThresholdSelector
+from probly.selective_prediction import SelectivePredictor, selector
 from probly.transformation import dropout
 
 from examples.utils.model import MLPClassifier
@@ -60,10 +62,10 @@ model.eval()
 sampling = {"num_samples": 100}
 thresholds = {"total": 0.1, "epistemic": 0.03}
 predictors = {
-    "total": SelectivePredictor(model, ThresholdSelector(thresholds["total"]), representer_kwargs=sampling),
+    "total": SelectivePredictor(model, selector=selector(threshold=thresholds["total"]), representer_kwargs=sampling),
     "epistemic": SelectivePredictor(
         model,
-        ThresholdSelector(thresholds["epistemic"]),
+        selector=selector(threshold=thresholds["epistemic"]),
         notion="epistemic",
         loss=LogLoss(),
         representer_kwargs=sampling,
@@ -73,7 +75,7 @@ predictors = {
 
 def run(predictor: SelectivePredictor, x: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     with torch.no_grad():
-        result = predictor(torch.from_numpy(x).float())
+        result = predictor.predict(torch.from_numpy(x).float())
     prediction = result.decision.probabilities.argmax(dim=-1).numpy()
     return prediction, result.uncertainty.numpy(), result.accepted.numpy()
 
@@ -136,13 +138,17 @@ plt.show()
 # Accuracy vs. coverage
 # ---------------------
 #
-# Dots mark the thresholds used above.
+# The curves come from :func:`~probly.metrics.selective_prediction.risk_coverage_curve`, and
+# :func:`~probly.evaluation.selective_prediction.evaluate_selective_prediction` summarizes them by their areas (lower is
+# better) and the risk at full coverage. Dots mark the thresholds used above.
 
 fig, ax = plt.subplots(figsize=(7, 4.5))
 for (notion, (pred, uncertainty, accepted)), color in zip(test.items(), [PURPLE, TEAL], strict=True):
-    hit = (pred == y_test)[np.argsort(uncertainty, kind="stable")]
-    n = np.arange(1, len(hit) + 1)
-    ax.plot(n / len(hit), np.cumsum(hit) / n, color=color, label=f"selective ({notion})")
+    errors = (pred != y_test).astype(float)
+    coverage, risk, _ = risk_coverage_curve(uncertainty, errors)
+    ax.plot(coverage, 1 - risk, color=color, label=f"selective ({notion})")
+    m = evaluate_selective_prediction(uncertainty, errors, ["augrc", "aurc", "risk@1"])
+    print(f"{notion:9s} AUGRC {m['augrc']:.4f}  AURC {m['aurc']:.4f}  risk at full coverage {m['risk@1']:.3f}")
     ax.scatter(accepted.mean(), (pred == y_test)[accepted].mean(), color=color, zorder=3)
 ax.axhline(correct.mean(), color="black", linestyle="--", label="normal prediction")
 ax.set_xlabel("coverage")
